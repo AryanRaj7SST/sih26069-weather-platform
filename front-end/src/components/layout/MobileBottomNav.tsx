@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Map, AlertTriangle, Search } from 'lucide-react';
+import { Home, Map, AlertTriangle, BarChart3, Search } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
   const location = useLocation();
@@ -9,6 +9,7 @@ export const MobileBottomNav: React.FC = () => {
     { name: 'Home', path: '/', icon: Home },
     { name: 'Live Map', path: '/live-map', icon: Map },
     { name: 'Report', path: '/report', icon: AlertTriangle },
+    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Track', path: '/track-report', icon: Search },
   ];
 

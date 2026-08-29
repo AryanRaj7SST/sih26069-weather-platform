@@ -6,6 +6,7 @@ import { LiveMapPage } from '@/pages/LiveMapPage';
 import { CitizenReportPage } from '@/pages/CitizenReportPage';
 import { TrackReportPage } from '@/pages/TrackReportPage';
 import { AdminVerificationQueuePage } from '@/pages/AdminVerificationQueuePage';
+import { AnalyticsPage } from '@/pages/AnalyticsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/track-report" element={<TrackReportPage />} />
           <Route path="/admin/queue" element={<AdminVerificationQueuePage />} />
           <Route path="/verification" element={<AdminVerificationQueuePage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
