@@ -10,6 +10,27 @@ from app.intelligence.clustering_engine import (
     IncidentClusteringEngine,
     clustering_engine,
 )
+from app.intelligence.credibility_collector import (
+    CredibilityCollector,
+    credibility_collector,
+)
+from app.intelligence.credibility_engine import (
+    CredibilityEngine,
+    credibility_engine,
+)
+from app.intelligence.credibility_evaluation_dataset import (
+    BenchmarkTestCase,
+    generate_benchmark_dataset,
+    run_synthetic_benchmark,
+)
+from app.intelligence.credibility_explanation_builder import (
+    CredibilityExplanationBuilder,
+    credibility_explanation_builder,
+)
+from app.intelligence.credibility_scorer import (
+    CredibilityScorer,
+    credibility_scorer,
+)
 from app.intelligence.duplicate_scorer import DuplicateScorer, duplicate_scorer
 from app.intelligence.evaluation_dataset import (
     BENCHMARK_EVALUATION_PAIRS,
@@ -55,9 +76,15 @@ from app.intelligence.resolver import LocationResolver, location_resolver
 from app.intelligence.schemas import (
     CandidateQueryResult,
     ClusterAssignmentResult,
+    ContradictionInput,
     CorroborationAssessment,
     CorroborationResult,
     CorroborationSignalBreakdown,
+    CredibilityAssessment,
+    CredibilityProvenanceSummary,
+    CredibilityResult,
+    CredibilitySignalBreakdown,
+    DigitalEvidenceGroupInput,
     DuplicateAssessment,
     DuplicateDecision,
     DuplicateSignalBreakdown,
@@ -66,12 +93,15 @@ from app.intelligence.schemas import (
     EvidenceLinkSignalBreakdown,
     EvidenceRelationship,
     ExtractedEntity,
+    IncidentCredibilityInputs,
     LocationCandidate,
     LocationResolutionResult,
     ObservationDataQuality,
     ObservationRelationship,
+    PhysicalStationInput,
     ResolutionMethod,
     ResolutionStatus,
+    SourceFamily,
     TrendAnalysisResult,
     TrendDirection,
 )
@@ -102,6 +132,15 @@ __all__ = [
     "CorroborationSignalBreakdown",
     "CorroborationAssessment",
     "CorroborationResult",
+    "SourceFamily",
+    "DigitalEvidenceGroupInput",
+    "PhysicalStationInput",
+    "ContradictionInput",
+    "IncidentCredibilityInputs",
+    "CredibilitySignalBreakdown",
+    "CredibilityProvenanceSummary",
+    "CredibilityAssessment",
+    "CredibilityResult",
     "EntityExtractor",
     "entity_extractor",
     "LocationResolver",
@@ -138,4 +177,15 @@ __all__ = [
     "observation_corroboration_engine",
     "OBSERVATION_BENCHMARK_CASES",
     "run_observation_benchmark",
+    "CredibilityScorer",
+    "credibility_scorer",
+    "CredibilityCollector",
+    "credibility_collector",
+    "CredibilityExplanationBuilder",
+    "credibility_explanation_builder",
+    "CredibilityEngine",
+    "credibility_engine",
+    "BenchmarkTestCase",
+    "generate_benchmark_dataset",
+    "run_synthetic_benchmark",
 ]

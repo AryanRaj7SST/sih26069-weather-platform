@@ -395,3 +395,188 @@ class CorroborationResult(BaseModel):
     corroboration_score: float = Field(..., ge=0.0, le=1.0, description="Composite score.")
     is_persisted: bool = Field(default=False, description="True if row was created/updated.")
     assessment: CorroborationAssessment = Field(..., description="Full assessment details.")
+
+
+class SourceFamily(str, Enum):
+    """Coarse categorization of independent institutional source families."""
+
+    CITIZEN = "CITIZEN"
+    OFFICIAL = "OFFICIAL"
+    NEWS = "NEWS"
+    SOCIAL = "SOCIAL"
+    SENSOR = "SENSOR"
+    OTHER = "OTHER"
+
+
+class DigitalEvidenceGroupInput(BaseModel):
+    """Input payload for a grouped provenance cluster of digital evidence."""
+
+    provenance_key: str = Field(..., description="Canonical domain, wire tag, or hash key.")
+    max_confidence: float = Field(..., ge=0.0, le=1.0, description="Max confidence in group.")
+    role_weight: float = Field(
+        ..., ge=0.0, le=1.0, description="Role weight (1.0 supporting, 0.35 related)."
+    )
+    article_count: int = Field(default=1, ge=1, description="Items in this provenance group.")
+    source_family: SourceFamily = Field(
+        default=SourceFamily.NEWS, description="Source family category."
+    )
+    is_derived_lineage: bool = Field(
+        default=False,
+        description="True if derived/cross-quoted from another primary source.",
+    )
+
+
+class PhysicalStationInput(BaseModel):
+    """Input payload for a single physical monitoring station time-series."""
+
+    station_key: str = Field(..., description="(source_id, station_code) identifier.")
+    corroboration_score: float = Field(..., ge=0.0, le=1.0, description="Station trend score.")
+    relationship_weight: float = Field(
+        ..., ge=0.0, le=1.0, description="Weight (1.0 corroborating, 0.50 consistent, 0.20 weak)."
+    )
+    source_family: SourceFamily = Field(default=SourceFamily.SENSOR, description="Source family.")
+    points_count: int = Field(default=1, ge=1, description="Number of readings in sequence.")
+
+
+class ContradictionInput(BaseModel):
+    """Input payload for a diagnostic negative contradictory signal."""
+
+    signal_source_key: str = Field(..., description="Source provenance key of contradiction.")
+    contradiction_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Contradiction severity score."
+    )
+    is_diagnostic: bool = Field(default=True, description="True if diagnostic contradiction.")
+    is_physical_sensor: bool = Field(default=True, description="True if physical sensor.")
+
+
+class IncidentCredibilityInputs(BaseModel):
+    """Normalized signal inputs collected from database for pure mathematical scoring."""
+
+    incident_id: uuid.UUID = Field(..., description="Target WeatherReport ID.")
+    source_code: str = Field(..., description="Source code of originating incident.")
+    source_type: str = Field(..., description="Source type of originating incident.")
+    source_base_trust: float = Field(..., ge=0.0, le=1.0, description="Source base trust score.")
+    origin_family: SourceFamily = Field(
+        default=SourceFamily.CITIZEN, description="Originating source family."
+    )
+    has_coordinates: bool = Field(default=True, description="Valid coordinates present.")
+    has_timestamp: bool = Field(default=True, description="Valid occurred_at present.")
+    has_location_name: bool = Field(default=True, description="Location name present.")
+    has_description: bool = Field(default=True, description="Description present.")
+    has_category: bool = Field(default=True, description="Category present.")
+    cluster_member_count: int = Field(default=1, ge=1, description="Reports in duplicate cluster.")
+    evidence_groups: List[DigitalEvidenceGroupInput] = Field(
+        default_factory=list, description="Digital evidence provenance groups."
+    )
+    observation_stations: List[PhysicalStationInput] = Field(
+        default_factory=list, description="Physical monitoring stations."
+    )
+    negative_contradictions: List[ContradictionInput] = Field(
+        default_factory=list, description="Diagnostic contradictory signals."
+    )
+
+
+class CredibilitySignalBreakdown(BaseModel):
+    """Decomposed signal component values for structured credibility explanation."""
+
+    source_prior: float = Field(
+        ..., ge=0.0, le=1.0, description="Base source institutional trust prior."
+    )
+    report_quality_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Internal report metadata completeness."
+    )
+    incident_baseline: float = Field(
+        ..., ge=0.0, le=1.0, description="Base incident anchor score B_incident."
+    )
+    crowd_cluster_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Duplicate cluster crowd signal S_crowd."
+    )
+    digital_evidence_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Grouped digital evidence score S_evidence."
+    )
+    physical_observation_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Physical observation score S_observation."
+    )
+    synthesized_support: float = Field(
+        ..., ge=0.0, le=1.0, description="Synthesized external support S_support."
+    )
+    diversity_multiplier: float = Field(
+        ..., ge=1.0, le=1.5, description="Source family diversity multiplier D_diversity."
+    )
+    support_delta: float = Field(..., ge=0.0, le=1.0, description="Corroboration lift Delta.")
+    positive_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Pre-penalty positive score C_positive."
+    )
+    negative_penalty: float = Field(..., ge=0.0, le=1.0, description="Negative penalty P_negative.")
+    penalized_score: float = Field(
+        ..., ge=-1.0, le=1.0, description="Post-penalty score C_penalized."
+    )
+    applied_cap: float = Field(..., ge=0.0, le=1.0, description="Policy upper bound cap.")
+    final_credibility_score: float = Field(
+        ..., ge=0.0, le=0.98, description="Final clamped machine credibility score."
+    )
+
+
+class CredibilityProvenanceSummary(BaseModel):
+    """Provenance and independence accounting summary."""
+
+    originating_source_family: SourceFamily = Field(..., description="Origin source family.")
+    independent_family_count: int = Field(
+        ..., ge=1, description="Count of distinct independent source families."
+    )
+    participating_families: List[SourceFamily] = Field(
+        default_factory=list, description="List of distinct participating families."
+    )
+    cluster_member_count: int = Field(default=1, ge=1, description="Cluster member count.")
+    digital_provenance_groups_count: int = Field(
+        default=0, ge=0, description="Count of distinct digital evidence groups."
+    )
+    physical_stations_count: int = Field(
+        default=0, ge=0, description="Count of distinct physical stations."
+    )
+    has_cross_quoted_lineage: bool = Field(
+        default=False, description="True if derived/cross-quoted lineage detected."
+    )
+
+
+class CredibilityAssessment(BaseModel):
+    """Full structured machine assessment persisted into WeatherReport.credibility_explanation."""
+
+    incident_id: uuid.UUID = Field(..., description="Target WeatherReport ID.")
+    credibility_score: float = Field(
+        ..., ge=0.0, le=0.98, description="Machine credibility score (0.0000 - 0.9800)."
+    )
+    signals: CredibilitySignalBreakdown = Field(
+        ..., description="Decomposed mathematical signal breakdown."
+    )
+    provenance: CredibilityProvenanceSummary = Field(
+        ..., description="Provenance and independence accounting details."
+    )
+    positive_drivers: List[str] = Field(
+        default_factory=list, description="Primary positive credibility factors."
+    )
+    negative_drivers: List[str] = Field(
+        default_factory=list, description="Mitigating or contradictory factors."
+    )
+    uncertainty_flags: List[str] = Field(
+        default_factory=list, description="Diagnostic data quality or missingness flags."
+    )
+    explanation: str = Field(..., description="Human-readable explainable summary text.")
+    engine_version: str = Field(default="v1", description="Engine version identifier.")
+    policy_version: str = Field(default="v1", description="Policy version identifier.")
+    assessed_at: datetime = Field(..., description="UTC assessment timestamp.")
+    is_stale: bool = Field(default=False, description="True if recomputation was partial.")
+    is_failure_fallback: bool = Field(
+        default=False, description="True if fallback preserved prior score."
+    )
+
+
+class CredibilityResult(BaseModel):
+    """Result of credibility evaluation including persistence status."""
+
+    incident_id: uuid.UUID = Field(..., description="Target incident ID.")
+    credibility_score: float = Field(..., ge=0.0, le=0.98, description="Clamped credibility score.")
+    is_persisted: bool = Field(default=False, description="True if updated in database.")
+    assessment: CredibilityAssessment = Field(
+        ..., description="Full structured assessment details."
+    )

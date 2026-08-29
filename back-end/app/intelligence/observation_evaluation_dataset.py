@@ -7,6 +7,8 @@ trend analysis, data quality, and contradictory semantics. They are NOT
 real-world validated ground truth.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -962,7 +964,7 @@ OBSERVATION_BENCHMARK_CASES: List[BenchmarkObservationCase] = [
 
 
 def run_observation_benchmark(
-    scorer: "ObservationScorer",  # type: ignore[name-defined]
+    scorer: ObservationScorer,
 ) -> Dict[str, Any]:
     """Run all 40 benchmark cases through the scorer and report metrics.
 
