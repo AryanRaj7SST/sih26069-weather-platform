@@ -77,8 +77,16 @@ class Settings(BaseSettings):
     MASTODON_POLL_INTERVAL_SECONDS: float = 30.0
     MASTODON_MIN_REQUEST_INTERVAL_SECONDS: float = 1.0
 
-    # AI & Semantic Intelligence (Optional in Phase 1)
-    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
+    # AI & Semantic Intelligence / Deduplication Engine (v1 Initial Parameters)
+    DUPLICATE_SEMANTIC_METHOD: str = "sparse_tfidf_ngram_v1"
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"  # Configured optional dense backend
+    DUPLICATE_SPATIAL_RADIUS_METERS: float = 2500.0
+    DUPLICATE_TIME_WINDOW_HOURS: float = 3.0
+    DUPLICATE_SEMANTIC_THRESHOLD: float = 0.50
+    DUPLICATE_CONFIRMED_THRESHOLD: float = 0.75
+    DUPLICATE_POSSIBLE_THRESHOLD: float = 0.55
+    DUPLICATE_CANDIDATE_LIMIT: int = 50
+    DUPLICATE_ENGINE_VERSION: str = "v1"
     LLM_PROVIDER: str = "none"
     LLM_API_KEY: str = ""
 

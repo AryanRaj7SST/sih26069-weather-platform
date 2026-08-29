@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +23,14 @@ class ResolutionMethod(str, Enum):
     GEOCODER = "GEOCODER"
     NLP_ENTITY_RESOLUTION = "NLP_ENTITY_RESOLUTION"
     HUMAN_CORRECTION = "HUMAN_CORRECTION"
+
+
+class DuplicateDecision(str, Enum):
+    """Outcome decision of semantic duplicate evaluation."""
+
+    DUPLICATE = "DUPLICATE"
+    POSSIBLE_MATCH = "POSSIBLE_MATCH"
+    DISTINCT = "DISTINCT"
 
 
 class LocationCandidate(BaseModel):
@@ -100,4 +110,86 @@ class LocationResolutionResult(BaseModel):
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional audit, extraction context, or bounding box details.",
+    )
+
+
+class DuplicateSignalBreakdown(BaseModel):
+    """Detailed multi-dimensional signal breakdown of duplicate comparison."""
+
+    spatial_distance_meters: Optional[float] = Field(
+        default=None, description="Physical distance between incident coordinates."
+    )
+    spatial_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Spatial proximity similarity (0.0 to 1.0)."
+    )
+    temporal_delta_seconds: Optional[float] = Field(
+        default=None, description="Time delta between incident occurrences."
+    )
+    temporal_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Temporal proximity similarity (0.0 to 1.0)."
+    )
+    category_compatibility_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Hazard category compatibility (0.0 to 1.0)."
+    )
+    semantic_similarity: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Text vector semantic cosine similarity."
+    )
+    entity_compatibility_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Location entity match score."
+    )
+    source_relationship_score: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Contextual source cross-correlation score."
+    )
+
+
+class DuplicateAssessment(BaseModel):
+    """Explainable evaluation output comparing two incident reports for duplication."""
+
+    candidate_report_id: uuid.UUID = Field(..., description="ID of the incoming report.")
+    reference_report_id: uuid.UUID = Field(..., description="ID of the existing comparison report.")
+    decision: DuplicateDecision = Field(..., description="Classification decision.")
+    overall_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Composite duplicate similarity score."
+    )
+    signals: DuplicateSignalBreakdown = Field(..., description="Signal breakdown.")
+    explanation: str = Field(..., description="Human-readable decision explanation.")
+    model_version: str = Field(..., description="Engine/model version identifier.")
+    semantic_method: str = Field(
+        default="sparse_tfidf_ngram_v1",
+        description="Active semantic vectorization method utilized.",
+    )
+    assessed_at: datetime = Field(..., description="UTC assessment timestamp.")
+
+
+class CandidateQueryResult(BaseModel):
+    """Result of candidate retrieval with completeness and truncation diagnostics."""
+
+    candidates: List[Any] = Field(default_factory=list, description="Candidate report objects.")
+    total_found: int = Field(default=0, description="Total candidates matching criteria.")
+    candidate_limit: int = Field(default=50, description="Max candidate limit configured.")
+    is_truncated: bool = Field(
+        default=False, description="True if candidate count reached the query limit cap."
+    )
+
+
+class ClusterAssignmentResult(BaseModel):
+    """Result of evaluating a report against incident duplicate clusters."""
+
+    report_id: uuid.UUID = Field(..., description="ID of the evaluated report.")
+    decision: DuplicateDecision = Field(..., description="Clustering decision.")
+    cluster_id: Optional[uuid.UUID] = Field(
+        default=None, description="Assigned DuplicateCluster ID if confirmed duplicate."
+    )
+    is_primary: bool = Field(
+        default=False, description="True if report is the primary anchor of the cluster."
+    )
+    matched_report_id: Optional[uuid.UUID] = Field(
+        default=None, description="ID of the primary/reference report matched against."
+    )
+    candidate_count: int = Field(default=0, description="Number of candidates evaluated.")
+    is_truncated: bool = Field(
+        default=False, description="True if candidate retrieval reached configured cap."
+    )
+    assessment: Optional[DuplicateAssessment] = Field(
+        default=None, description="Detailed assessment with the best candidate match."
     )
