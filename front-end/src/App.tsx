@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Activity, CloudRain, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Activity, CloudRain, ShieldCheck, ArrowRight, Search } from 'lucide-react';
 import { CitizenReportPage } from '@/pages/CitizenReportPage';
+import { TrackReportPage } from '@/pages/TrackReportPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,14 @@ function HomePage() {
             <span>Report Weather Event</span>
             <ArrowRight className="h-4 w-4" />
           </Link>
+
+          <Link
+            to="/track-report"
+            className="flex items-center space-x-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+          >
+            <Search className="h-4 w-4 text-slate-500" />
+            <span>Track Existing Report</span>
+          </Link>
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -64,8 +73,8 @@ function HomePage() {
           <div className="flex items-center space-x-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
             <CloudRain className="h-5 w-5 text-sky-600" />
             <div>
-              <p className="text-xs text-slate-500">Architecture</p>
-              <p className="text-sm font-semibold text-slate-900">Phase 4 Ready</p>
+              <p className="text-xs text-slate-500">Public Tracking</p>
+              <p className="text-sm font-semibold text-slate-900">Live & Ready</p>
             </div>
           </div>
         </div>
@@ -85,6 +94,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/report" element={<CitizenReportPage />} />
+          <Route path="/track-report" element={<TrackReportPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

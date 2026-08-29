@@ -37,3 +37,46 @@ export interface ReportSubmitResponse {
     request_id?: string;
   };
 }
+
+export interface CategoryDetail {
+  code: string;
+  title: string;
+}
+
+export interface LocationDetail {
+  name?: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface MediaDetail {
+  id: string;
+  media_type: string;
+  url: string;
+  sha256_hash: string;
+}
+
+export interface ReportDetailData {
+  id: string;
+  tracking_id: string;
+  title: string;
+  description?: string | null;
+  category: CategoryDetail;
+  severity: string;
+  location: LocationDetail;
+  occurred_at: string;
+  processing_status: string;
+  verification_status: string;
+  credibility_score: number;
+  media: MediaDetail[];
+  created_at: string;
+}
+
+export interface ReportDetailResponse {
+  success: boolean;
+  data: ReportDetailData;
+  meta: {
+    timestamp: string;
+    request_id?: string;
+  };
+}

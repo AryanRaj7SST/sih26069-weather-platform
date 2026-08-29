@@ -338,3 +338,40 @@ async def test_get_report_privacy_no_internal_leak():
         assert "text_embedding" not in data
         assert "credibility_explanation" not in data
         assert "audit_logs" not in data
+
+
+@pytest.mark.asyncio
+async def test_get_report_with_media_returns_valid_url():
+    """Test that retrieving report with media returns valid accessible media URLs."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        fake_png = io.BytesIO(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfake_png_data")
+        files = [
+            ("media_files", ("evidence.png", fake_png, "image/png")),
+        ]
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "19.0760",
+                "longitude": "72.8777",
+                "category_code": "FLOOD_WATERLOGGING",
+                "severity": "HIGH",
+                "title": "Evidence media test report",
+            },
+            files=files,
+        )
+        assert create_res.status_code == 201
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        get_res = await client.get(f"/api/v1/reports/{tracking_id}")
+        assert get_res.status_code == 200
+        media_list = get_res.json()["data"]["media"]
+        assert len(media_list) == 1
+        assert "url" in media_list[0]
+        media_url = media_list[0]["url"]
+
+        # Verify presigned URL characteristics
+        assert "weather-media" in media_url
+        assert "X-Amz-Signature=" in media_url or "Signature=" in media_url
+        assert "X-Amz-Expires=" in media_url or "Expires=" in media_url
+        assert media_list[0]["media_type"] == "IMAGE"
+        assert len(media_list[0]["sha256_hash"]) == 64

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = "weather-media"
     S3_REGION: str = "us-east-1"
     S3_USE_SSL: bool = False
+    S3_PRESIGNED_EXPIRY_SECONDS: int = 3600
 
     # External APIs (Optional in Phase 1)
     DATA_GOV_API_KEY: str = ""

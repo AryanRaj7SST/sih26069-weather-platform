@@ -50,7 +50,7 @@ class StorageService:
         )
 
     def ensure_bucket_exists(self, bucket_name: Optional[str] = None) -> None:
-        """Create bucket in MinIO / S3 if it does not already exist."""
+        """Create bucket in MinIO / S3 if missing. Bucket remains strictly private."""
         target_bucket = bucket_name or self.default_bucket
         try:
             self.client.head_bucket(Bucket=target_bucket)
@@ -61,6 +61,12 @@ class StorageService:
             else:
                 raise
 
+        # Ensure any legacy public bucket policy is revoked/deleted
+        try:
+            self.client.delete_bucket_policy(Bucket=target_bucket)
+        except Exception:
+            pass
+
     def upload_media_file(
         self,
         file_bytes: bytes,
@@ -69,7 +75,7 @@ class StorageService:
         bucket_name: Optional[str] = None,
         report_id: Optional[uuid.UUID] = None,
     ) -> Tuple[str, str, int, str]:
-        """Validate, compute hash, and upload a media file to object storage.
+        """Validate, compute hash, and upload a media file to private object storage.
 
         Returns (storage_key, sha256_hash, file_size_bytes, media_type).
         """
@@ -110,10 +116,20 @@ class StorageService:
 
         return storage_key, sha256_hash, file_size, media_type
 
-    def get_media_url(self, storage_key: str, bucket_name: Optional[str] = None) -> str:
-        """Construct the public HTTP access URL for a stored media object."""
+    def get_media_url(
+        self,
+        storage_key: str,
+        bucket_name: Optional[str] = None,
+        expires_in: Optional[int] = None,
+    ) -> str:
+        """Construct temporary presigned GET URL for secure, credential-free browser display."""
         target_bucket = bucket_name or self.default_bucket
-        return f"{self.endpoint_url}/{target_bucket}/{storage_key}"
+        expiry = expires_in or settings.S3_PRESIGNED_EXPIRY_SECONDS
+        return self.client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": target_bucket, "Key": storage_key},
+            ExpiresIn=expiry,
+        )
 
     def delete_media_file(self, storage_key: str, bucket_name: Optional[str] = None) -> None:
         """Delete an object from storage (e.g. on transaction rollback)."""

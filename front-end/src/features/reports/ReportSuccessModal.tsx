@@ -88,14 +88,13 @@ export const ReportSuccessModal: React.FC<ReportSuccessModalProps> = ({
             >
               Submit Another Report
             </button>
-            <button
-              type="button"
-              onClick={onReset}
+            <a
+              href={`/track-report?id=${encodeURIComponent(data.tracking_id)}`}
               className="flex flex-1 items-center justify-center space-x-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
             >
-              <span>Done</span>
+              <span>Track This Report</span>
               <ArrowRight className="h-4 w-4" />
-            </button>
+            </a>
           </div>
         </div>
       </div>

@@ -10,7 +10,7 @@ export const Navbar: React.FC = () => {
     { name: 'Home', path: '/' },
     { name: 'Live Map', path: '/map' },
     { name: 'Report Weather Event', path: '/report' },
-    { name: 'Track Report', path: '/track' },
+    { name: 'Track Report', path: '/track-report' },
   ];
 
   return (

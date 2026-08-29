@@ -1,4 +1,8 @@
-import { CitizenReportFormValues, ReportSubmitResponse } from '@/types';
+import {
+  CitizenReportFormValues,
+  ReportDetailResponse,
+  ReportSubmitResponse,
+} from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
@@ -46,4 +50,24 @@ export async function submitCitizenReport(
   }
 
   return data as ReportSubmitResponse;
+}
+
+export async function fetchReportByTrackingId(
+  idOrTracking: string
+): Promise<ReportDetailResponse> {
+  const cleanId = idOrTracking.trim();
+  const response = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(cleanId)}`);
+
+  const data = await response.json();
+
+  if (!response.ok || !data.success) {
+    const errorMsg =
+      data.error?.message ||
+      (data.detail?.message
+        ? data.detail.message
+        : `Weather report with ID ${cleanId} does not exist.`);
+    throw new Error(errorMsg);
+  }
+
+  return data as ReportDetailResponse;
 }
