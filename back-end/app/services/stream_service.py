@@ -24,6 +24,10 @@ class StreamService:
     DEFAULT_EVIDENCE_STREAM = "stream:weather:evidence"
     DEFAULT_EVIDENCE_GROUP = "group:weather:evidence_processors"
 
+    DEFAULT_ORCHESTRATION_STREAM = "stream:weather:orchestration"
+    DEFAULT_ORCHESTRATION_GROUP = "group:weather:orchestrators"
+    DEFAULT_DEAD_LETTER_STREAM = "stream:weather:dead_letter"
+
     def __init__(self, client: Optional[AsyncRedisClient] = None) -> None:
         self.client = client or redis_client
 

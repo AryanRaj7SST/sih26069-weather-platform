@@ -17,6 +17,7 @@ from app.intelligence.schemas import (
 )
 from app.models.category import EventCategory
 from app.models.evidence import EvidenceItem, IncidentEvidenceLink
+from app.models.source import Source
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,12 @@ class EvidenceLinkingEngine:
             return results
 
         source_type = evidence.evidence_type
-        if evidence.source:
-            source_type = evidence.source.source_type
+        if evidence.source_id:
+            src_stmt = select(Source.source_type).where(Source.id == evidence.source_id)
+            src_res = await db.execute(src_stmt)
+            src_val = src_res.scalar_one_or_none()
+            if src_val:
+                source_type = src_val
 
         for incident in candidates:
             cat_code = "OTHER"
