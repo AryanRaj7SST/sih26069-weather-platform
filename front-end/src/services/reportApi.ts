@@ -1,6 +1,8 @@
 import {
   CitizenReportFormValues,
   ReportDetailResponse,
+  ReportListQueryParams,
+  ReportListResponse,
   ReportSubmitResponse,
 } from '@/types';
 
@@ -70,4 +72,37 @@ export async function fetchReportByTrackingId(
   }
 
   return data as ReportDetailResponse;
+}
+
+export async function fetchReportList(
+  params: ReportListQueryParams = {}
+): Promise<ReportListResponse> {
+  const searchParams = new URLSearchParams();
+
+  if (params.page !== undefined) searchParams.append('page', params.page.toString());
+  if (params.page_size !== undefined) searchParams.append('page_size', params.page_size.toString());
+  if (params.category && params.category !== 'ALL') searchParams.append('category', params.category);
+  if (params.severity && params.severity !== 'ALL') searchParams.append('severity', params.severity);
+  if (params.status && params.status !== 'ALL') searchParams.append('status', params.status);
+  if (params.from_date) searchParams.append('from_date', params.from_date);
+  if (params.to_date) searchParams.append('to_date', params.to_date);
+  if (params.min_credibility !== undefined) searchParams.append('min_credibility', params.min_credibility.toString());
+  if (params.bbox) searchParams.append('bbox', params.bbox);
+
+  const queryString = searchParams.toString();
+  const url = `${API_BASE_URL}/reports${queryString ? `?${queryString}` : ''}`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (!response.ok || !data.success) {
+    const errorMsg =
+      data.error?.message ||
+      (data.detail?.message
+        ? data.detail.message
+        : 'Failed to fetch weather reports.');
+    throw new Error(errorMsg);
+  }
+
+  return data as ReportListResponse;
 }

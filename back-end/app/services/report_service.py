@@ -1,3 +1,4 @@
+import math
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -5,7 +6,7 @@ from typing import List, Optional, Tuple
 
 from fastapi import UploadFile
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -197,6 +198,87 @@ class ReportService:
 
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_reports(
+        self,
+        session: AsyncSession,
+        page: int = 1,
+        page_size: int = 20,
+        category: Optional[str] = None,
+        severity: Optional[str] = None,
+        status: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        min_credibility: Optional[float] = None,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+    ) -> Tuple[List[WeatherReport], int, int, bool, bool]:
+        """Query and filter weather reports with PostGIS spatial bounds and pagination."""
+        stmt = select(WeatherReport).options(
+            selectinload(WeatherReport.category),
+            selectinload(WeatherReport.media),
+        )
+        count_stmt = select(func.count(WeatherReport.id))
+
+        filters = []
+
+        if category:
+            clean_cat = category.strip().upper()
+            stmt = stmt.outerjoin(WeatherReport.category)
+            count_stmt = count_stmt.outerjoin(WeatherReport.category)
+            filters.append(
+                or_(
+                    EventCategory.category_code == clean_cat,
+                    WeatherReport.reported_category.ilike(f"%{clean_cat}%"),
+                )
+            )
+
+        if severity:
+            clean_sev = severity.strip().upper()
+            filters.append(WeatherReport.severity == clean_sev)
+
+        if status:
+            statuses = [s.strip().upper() for s in status.split(",") if s.strip()]
+            if len(statuses) == 1:
+                filters.append(WeatherReport.verification_status == statuses[0])
+            elif len(statuses) > 1:
+                filters.append(WeatherReport.verification_status.in_(statuses))
+
+        if from_date:
+            filters.append(WeatherReport.occurred_at >= from_date)
+
+        if to_date:
+            filters.append(WeatherReport.occurred_at <= to_date)
+
+        if min_credibility is not None:
+            filters.append(WeatherReport.credibility_score >= min_credibility)
+
+        if bbox is not None:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+            filters.append(func.ST_Within(WeatherReport.geom, envelope))
+
+        if filters:
+            for f in filters:
+                stmt = stmt.where(f)
+                count_stmt = count_stmt.where(f)
+
+        # 1. Total records count
+        count_res = await session.execute(count_stmt)
+        total_records = count_res.scalar() or 0
+
+        # 2. Paginated data query
+        stmt = stmt.order_by(WeatherReport.occurred_at.desc(), WeatherReport.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+        result = await session.execute(stmt)
+        reports = list(result.scalars().all())
+
+        # 3. Calculate pagination metadata
+        total_pages = max(1, math.ceil(total_records / page_size)) if total_records > 0 else 1
+        has_next = page < total_pages
+        has_prev = page > 1
+
+        return reports, total_records, total_pages, has_next, has_prev
 
 
 report_service = ReportService()

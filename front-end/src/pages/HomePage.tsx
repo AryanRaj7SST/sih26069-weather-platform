@@ -9,13 +9,6 @@ import { ProcessFlowCard } from '@/features/home/ProcessFlowCard';
 import { RecentReportsTable } from '@/features/home/RecentReportsTable';
 
 export const HomePage: React.FC = () => {
-  const handleScrollToMap = () => {
-    const mapElement = document.getElementById('live-map-overview');
-    if (mapElement) {
-      mapElement.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   return (
     <div className="flex min-h-screen flex-col bg-slate-50/60 text-slate-900 pb-16 md:pb-0">
       {/* Navigation Header */}
@@ -24,7 +17,7 @@ export const HomePage: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1">
         {/* Hero Section matching Stitch */}
-        <HeroSection onExploreMapClick={handleScrollToMap} />
+        <HeroSection />
 
         {/* Content Section */}
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-8">

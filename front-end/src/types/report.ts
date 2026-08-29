@@ -80,3 +80,34 @@ export interface ReportDetailResponse {
     request_id?: string;
   };
 }
+
+export interface PaginationMeta {
+  page: number;
+  page_size: number;
+  total_records: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface ReportListQueryParams {
+  page?: number;
+  page_size?: number;
+  category?: string;
+  severity?: SeverityType | string;
+  status?: string;
+  from_date?: string;
+  to_date?: string;
+  min_credibility?: number;
+  bbox?: string;
+}
+
+export interface ReportListResponse {
+  success: boolean;
+  data: ReportDetailData[];
+  pagination: PaginationMeta;
+  meta: {
+    timestamp: string;
+    request_id?: string;
+  };
+}

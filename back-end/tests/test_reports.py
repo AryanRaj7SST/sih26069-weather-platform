@@ -90,8 +90,12 @@ async def test_submit_citizen_report_with_media():
             "location_name": "Shivajinagar, Pune",
         }
 
-        fake_png_data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfake_png_binary_data"
-        fake_image = io.BytesIO(fake_png_data)
+        valid_png_data = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00"
+            b"\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe"
+            b"\xa7Cv\xfe\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        fake_image = io.BytesIO(valid_png_data)
         files = [
             ("media_files", ("flood_photo.png", fake_image, "image/png")),
         ]
@@ -115,7 +119,7 @@ async def test_submit_citizen_report_with_media():
             assert media_record is not None
             assert media_record.media_type == "IMAGE"
             assert media_record.mime_type == "image/png"
-            assert media_record.file_size_bytes == len(fake_png_data)
+            assert media_record.file_size_bytes == len(valid_png_data)
             assert len(media_record.sha256_hash) == 64
 
             # Verify MinIO S3 object exists
@@ -124,7 +128,7 @@ async def test_submit_citizen_report_with_media():
                 Key=media_record.storage_key,
             )
             downloaded_bytes = s3_obj["Body"].read()
-            assert downloaded_bytes == fake_png_data
+            assert downloaded_bytes == valid_png_data
 
 
 @pytest.mark.asyncio
@@ -344,7 +348,12 @@ async def test_get_report_privacy_no_internal_leak():
 async def test_get_report_with_media_returns_valid_url():
     """Test that retrieving report with media returns valid accessible media URLs."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        fake_png = io.BytesIO(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfake_png_data")
+        valid_png_data = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00"
+            b"\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe"
+            b"\xa7Cv\xfe\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        fake_png = io.BytesIO(valid_png_data)
         files = [
             ("media_files", ("evidence.png", fake_png, "image/png")),
         ]
@@ -375,3 +384,169 @@ async def test_get_report_with_media_returns_valid_url():
         assert "X-Amz-Expires=" in media_url or "Expires=" in media_url
         assert media_list[0]["media_type"] == "IMAGE"
         assert len(media_list[0]["sha256_hash"]) == 64
+
+        # Verify list endpoint also returns the valid presigned media URL
+        list_res = await client.get("/api/v1/reports?page_size=10")
+        assert list_res.status_code == 200
+        items = list_res.json()["data"]
+        matching_item = next((item for item in items if item["tracking_id"] == tracking_id), None)
+        assert matching_item is not None
+        assert len(matching_item["media"]) == 1
+        assert "weather-media" in matching_item["media"][0]["url"]
+
+
+@pytest.mark.asyncio
+async def test_list_reports_success_and_pagination():
+    """Test listing reports with page and page_size limits."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Create 2 reports
+        await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "12.9716",
+                "longitude": "77.5946",
+                "category_code": "HEAVY_RAINFALL",
+                "severity": "MODERATE",
+                "title": "Bengaluru heavy rain event",
+            },
+        )
+        await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "13.0827",
+                "longitude": "80.2707",
+                "category_code": "FLOOD_WATERLOGGING",
+                "severity": "HIGH",
+                "title": "Chennai flood event",
+            },
+        )
+
+        res = await client.get("/api/v1/reports?page=1&page_size=10")
+        assert res.status_code == 200
+        json_data = res.json()
+        assert json_data["success"] is True
+        assert isinstance(json_data["data"], list)
+        assert len(json_data["data"]) >= 2
+        assert "pagination" in json_data
+        assert json_data["pagination"]["page"] == 1
+        assert json_data["pagination"]["page_size"] == 10
+        assert json_data["pagination"]["total_records"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_list_reports_filter_by_category():
+    """Test filtering reports by category code."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "28.6139",
+                "longitude": "77.2090",
+                "category_code": "EXTREME_HEAT",
+                "severity": "SEVERE",
+                "title": "Delhi heatwave record",
+            },
+        )
+
+        res = await client.get("/api/v1/reports?category=EXTREME_HEAT")
+        assert res.status_code == 200
+        data = res.json()["data"]
+        for item in data:
+            code = item["category"]["code"]
+            title = item["category"]["title"].upper()
+            assert code == "EXTREME_HEAT" or "HEAT" in title
+
+
+@pytest.mark.asyncio
+async def test_list_reports_filter_by_severity():
+    """Test filtering reports by severity level."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.get("/api/v1/reports?severity=SEVERE")
+        assert res.status_code == 200
+        data = res.json()["data"]
+        for item in data:
+            assert item["severity"] == "SEVERE"
+
+
+@pytest.mark.asyncio
+async def test_list_reports_filter_by_status():
+    """Test filtering reports by verification status or comma-separated list."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.get("/api/v1/reports?status=PENDING,VERIFIED")
+        assert res.status_code == 200
+        data = res.json()["data"]
+        for item in data:
+            assert item["verification_status"] in ("PENDING", "VERIFIED")
+
+
+@pytest.mark.asyncio
+async def test_list_reports_filter_by_bbox():
+    """Test PostGIS spatial bounding box filtering."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Create a report in Mumbai (lat: 18.95, lon: 72.82)
+        await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "18.9500",
+                "longitude": "72.8200",
+                "category_code": "HEAVY_RAINFALL",
+                "severity": "MODERATE",
+                "title": "Mumbai South coastal rain",
+            },
+        )
+
+        # Mumbai Bounding Box: min_lon=72.7, min_lat=18.8, max_lon=73.0, max_lat=19.3
+        mumbai_bbox = "72.7,18.8,73.0,19.3"
+        res = await client.get(f"/api/v1/reports?bbox={mumbai_bbox}")
+        assert res.status_code == 200
+        data = res.json()["data"]
+        assert len(data) >= 1
+
+        # Coordinates should fall within Mumbai bbox
+        for item in data:
+            lat = item["location"]["latitude"]
+            lon = item["location"]["longitude"]
+            assert 18.8 <= lat <= 19.3
+            assert 72.7 <= lon <= 73.0
+
+
+@pytest.mark.asyncio
+async def test_list_reports_invalid_bbox():
+    """Test that invalid bbox format or bounds returns 422 error."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Malformed bbox
+        res = await client.get("/api/v1/reports?bbox=not_a_valid_bbox")
+        assert res.status_code == 422
+        assert res.json()["error"]["code"] == "VALIDATION_ERROR"
+
+        # Out-of-bounds bbox
+        res2 = await client.get("/api/v1/reports?bbox=200,10,210,20")
+        assert res2.status_code == 422
+        assert res2.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_list_reports_invalid_date_range():
+    """Test that from_date > to_date returns 422 error."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.get(
+            "/api/v1/reports?from_date=2026-08-30T00:00:00Z&to_date=2026-08-20T00:00:00Z"
+        )
+        assert res.status_code == 422
+        assert res.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_list_reports_privacy_no_internal_leak():
+    """Test that list report records exclude internal DB keys and audit fields."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.get("/api/v1/reports")
+        assert res.status_code == 200
+        data = res.json()["data"]
+        if data:
+            first = data[0]
+            assert "source_id" not in first
+            assert "raw_payload" not in first
+            assert "text_embedding" not in first
+            assert "credibility_explanation" not in first
+            assert "audit_logs" not in first

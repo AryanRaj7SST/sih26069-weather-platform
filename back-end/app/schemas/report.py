@@ -153,3 +153,23 @@ class ReportDetailResponse(BaseModel):
     success: bool = True
     data: ReportDetailData
     meta: Dict[str, Any]
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata model conforming to API contract."""
+
+    page: int
+    page_size: int
+    total_records: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+
+
+class ReportListResponse(BaseModel):
+    """Standard API envelope for paginated report listings."""
+
+    success: bool = True
+    data: List[ReportDetailData]
+    pagination: PaginationMeta
+    meta: Dict[str, Any]

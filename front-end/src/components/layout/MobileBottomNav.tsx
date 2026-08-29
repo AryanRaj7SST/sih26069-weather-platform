@@ -7,7 +7,7 @@ export const MobileBottomNav: React.FC = () => {
 
   const items = [
     { name: 'Home', path: '/', icon: Home },
-    { name: 'Live Map', path: '/#live-map-overview', icon: Map },
+    { name: 'Live Map', path: '/live-map', icon: Map },
     { name: 'Report', path: '/report', icon: AlertTriangle },
     { name: 'Track', path: '/track-report', icon: Search },
   ];

@@ -2,11 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { PlusCircle, Compass } from 'lucide-react';
 
-interface HeroSectionProps {
-  onExploreMapClick?: () => void;
-}
-
-export const HeroSection: React.FC<HeroSectionProps> = ({ onExploreMapClick }) => {
+export const HeroSection: React.FC = () => {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-blue-50/70 via-indigo-50/30 to-white py-12 md:py-16 border-b border-slate-200">
       {/* Subtle background decoration */}
@@ -32,14 +28,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onExploreMapClick }) =
             <span>Report a Weather Event</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={onExploreMapClick}
+          <Link
+            to="/live-map"
             className="flex w-full sm:w-auto items-center justify-center space-x-2 rounded-xl border border-blue-600 bg-white px-6 py-3.5 text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
           >
             <Compass className="h-4 w-4 text-blue-600" />
             <span>Explore Live Map</span>
-          </button>
+          </Link>
         </div>
       </div>
     </section>

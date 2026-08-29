@@ -1,20 +1,33 @@
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Path,
+    Query,
+    UploadFile,
+    status,
+)
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.models.report import WeatherReport
 from app.schemas.report import (
     CategoryDetail,
     CitizenReportCreate,
     LocationDetail,
     MediaDetail,
+    PaginationMeta,
     ReportDetailData,
     ReportDetailResponse,
+    ReportListResponse,
     ReportSubmitData,
     ReportSubmitResponse,
     SeverityType,
@@ -25,6 +38,58 @@ from app.services.storage import storage_service
 router = APIRouter()
 
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{3,64}$")
+
+
+def _serialize_report(report: WeatherReport) -> ReportDetailData:
+    """Serialize a WeatherReport model to a public ReportDetailData schema."""
+    category_code = (
+        report.category.category_code
+        if report.category is not None
+        else (report.reported_category or "UNKNOWN")
+    )
+    category_title = (
+        report.category.title
+        if report.category is not None
+        else (report.reported_category or "Weather Incident")
+    )
+
+    media_items: List[MediaDetail] = []
+    if report.media:
+        for m in report.media:
+            media_items.append(
+                MediaDetail(
+                    id=m.id,
+                    media_type=m.media_type,
+                    url=storage_service.get_media_url(
+                        storage_key=m.storage_key,
+                        bucket_name=m.storage_bucket,
+                    ),
+                    sha256_hash=m.sha256_hash,
+                )
+            )
+
+    return ReportDetailData(
+        id=report.id,
+        tracking_id=report.tracking_id,
+        title=report.title,
+        description=report.description,
+        category=CategoryDetail(
+            code=category_code,
+            title=category_title,
+        ),
+        severity=report.severity,
+        location=LocationDetail(
+            name=report.location_name,
+            latitude=report.latitude,
+            longitude=report.longitude,
+        ),
+        occurred_at=report.occurred_at,
+        processing_status=report.processing_status,
+        verification_status=report.verification_status,
+        credibility_score=report.credibility_score,
+        media=media_items,
+        created_at=report.created_at,
+    )
 
 
 @router.post(
@@ -114,6 +179,129 @@ async def submit_citizen_report(
 
 
 @router.get(
+    "",
+    response_model=ReportListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List & Filter Incident Reports",
+    description="Paginated list of incident reports with multi-criteria and geospatial filtering.",
+)
+async def list_reports(
+    page: int = Query(default=1, ge=1, description="Page number starting at 1"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Records per page (max 100)"),
+    category: Optional[str] = Query(None, description="Event category code"),
+    severity: Optional[SeverityType] = Query(None, description="Severity level"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Verification status or comma-separated statuses"
+    ),
+    from_date: Optional[datetime] = Query(None, description="Start date (ISO8601)"),
+    to_date: Optional[datetime] = Query(None, description="End date (ISO8601)"),
+    min_credibility: Optional[float] = Query(
+        None, ge=0.0, le=1.0, description="Minimum credibility score"
+    ),
+    bbox: Optional[str] = Query(
+        None,
+        description="Bounding box in min_lon,min_lat,max_lon,max_lat format",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> ReportListResponse:
+    """List and filter weather incident reports for map explorer and public lists."""
+    # 1. Validate date bounds
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "Parameter 'from_date' cannot be later than 'to_date'.",
+            },
+        )
+
+    # 2. Parse and validate bbox if provided
+    parsed_bbox: Optional[Tuple[float, float, float, float]] = None
+    if bbox:
+        parts = bbox.split(",")
+        if len(parts) != 4:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid bbox format. Expected 'min_lon,min_lat,max_lon,max_lat'.",
+                },
+            )
+        try:
+            min_lon, min_lat, max_lon, max_lat = (float(p.strip()) for p in parts)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid bbox coordinates. Values must be numeric floats.",
+                },
+            )
+
+        valid_lon = -180.0 <= min_lon <= 180.0 and -180.0 <= max_lon <= 180.0
+        valid_lat = -90.0 <= min_lat <= 90.0 and -90.0 <= max_lat <= 90.0
+        if not (valid_lon and valid_lat):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "VALIDATION_ERROR",
+                    "message": "Bounding box coordinates out of valid geographic ranges.",
+                },
+            )
+
+        if min_lon > max_lon or min_lat > max_lat:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid bbox range: min values must be <= max values.",
+                },
+            )
+
+        parsed_bbox = (min_lon, min_lat, max_lon, max_lat)
+
+    # 3. Query database
+    (
+        reports,
+        total_records,
+        total_pages,
+        has_next,
+        has_prev,
+    ) = await report_service.list_reports(
+        session=db,
+        page=page,
+        page_size=page_size,
+        category=category,
+        severity=severity,
+        status=status_filter,
+        from_date=from_date,
+        to_date=to_date,
+        min_credibility=min_credibility,
+        bbox=parsed_bbox,
+    )
+
+    # 4. Serialize data
+    items = [_serialize_report(r) for r in reports]
+
+    return ReportListResponse(
+        success=True,
+        data=items,
+        pagination=PaginationMeta(
+            page=page,
+            page_size=page_size,
+            total_records=total_records,
+            total_pages=total_pages,
+            has_next=has_next,
+            has_prev=has_prev,
+        ),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.get(
     "/{id}",
     response_model=ReportDetailResponse,
     status_code=status.HTTP_200_OK,
@@ -161,58 +349,9 @@ async def get_report_by_id_or_tracking(
             },
         )
 
-    # 3. Construct category detail
-    category_code = (
-        report.category.category_code
-        if report.category is not None
-        else (report.reported_category or "UNKNOWN")
-    )
-    category_title = (
-        report.category.title
-        if report.category is not None
-        else (report.reported_category or "Weather Incident")
-    )
-
-    # 4. Construct media details with public URLs
-    media_items: List[MediaDetail] = []
-    if report.media:
-        for m in report.media:
-            media_items.append(
-                MediaDetail(
-                    id=m.id,
-                    media_type=m.media_type,
-                    url=storage_service.get_media_url(
-                        storage_key=m.storage_key,
-                        bucket_name=m.storage_bucket,
-                    ),
-                    sha256_hash=m.sha256_hash,
-                )
-            )
-
     return ReportDetailResponse(
         success=True,
-        data=ReportDetailData(
-            id=report.id,
-            tracking_id=report.tracking_id,
-            title=report.title,
-            description=report.description,
-            category=CategoryDetail(
-                code=category_code,
-                title=category_title,
-            ),
-            severity=report.severity,
-            location=LocationDetail(
-                name=report.location_name,
-                latitude=report.latitude,
-                longitude=report.longitude,
-            ),
-            occurred_at=report.occurred_at,
-            processing_status=report.processing_status,
-            verification_status=report.verification_status,
-            credibility_score=report.credibility_score,
-            media=media_items,
-            created_at=report.created_at,
-        ),
+        data=_serialize_report(report),
         meta={
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "request_id": f"req_{uuid.uuid4().hex[:12]}",
