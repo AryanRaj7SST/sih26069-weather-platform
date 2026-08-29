@@ -1,5 +1,7 @@
 // Core Domain Enums & Types conforming to docs/DATA_MODEL.md and docs/API_CONTRACT.md
 
+export * from './report';
+
 export type SeverityLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'SEVERE' | 'CRITICAL';
 
 export type VerificationStatus =

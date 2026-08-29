@@ -1,2 +1,1 @@
-// Pages placeholder for Phase 1 foundation
-export {};
+export * from './CitizenReportPage';
