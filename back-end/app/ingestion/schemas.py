@@ -117,3 +117,96 @@ class NormalizedIngestionEvent(BaseModel):
         if v.tzinfo is None:
             return v.replace(tzinfo=timezone.utc)
         return v.astimezone(timezone.utc)
+
+
+class NormalizedObservationEvent(BaseModel):
+    """Standardized physical sensor telemetry representation consumed across the platform."""
+
+    event_id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        description="Unique pipeline event identifier.",
+    )
+    source_code: str = Field(
+        ...,
+        min_length=2,
+        max_length=50,
+        description="Originating source catalog code (e.g. 'CWC_NWDP', 'IMD_AWS').",
+    )
+    external_id: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description="Unique station-time observation identifier for deduplication and idempotency.",
+    )
+    station_code: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Stable station code identifier.",
+    )
+    station_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=150,
+        description="Human-readable station name.",
+    )
+    latitude: float = Field(
+        ...,
+        ge=-90.0,
+        le=90.0,
+        description="WGS84 decimal latitude.",
+    )
+    longitude: float = Field(
+        ...,
+        ge=-180.0,
+        le=180.0,
+        description="WGS84 decimal longitude.",
+    )
+    observed_at: datetime = Field(
+        ...,
+        description="Time when the sensor measurement was taken (UTC).",
+    )
+    water_level_m: Optional[float] = Field(
+        default=None,
+        description="River or reservoir water elevation in meters.",
+    )
+    rainfall_mm: Optional[float] = Field(
+        default=None,
+        description="Precipitation accumulation in millimeters.",
+    )
+    temperature_c: Optional[float] = Field(
+        default=None,
+        description="Ambient air temperature in Celsius.",
+    )
+    humidity_pct: Optional[float] = Field(
+        default=None,
+        description="Relative humidity percentage.",
+    )
+    wind_speed_kmh: Optional[float] = Field(
+        default=None,
+        description="Wind speed in km/h.",
+    )
+    wind_direction_deg: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=360,
+        description="Wind direction in degrees (0-360).",
+    )
+    pressure_hpa: Optional[float] = Field(
+        default=None,
+        description="Atmospheric pressure in hectopascals.",
+    )
+    raw_metrics: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Source-specific telemetry metadata.",
+    )
+    ingested_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Pipeline ingestion timestamp (UTC).",
+    )
+
+    @field_validator("observed_at", "ingested_at")
+    @classmethod
+    def ensure_utc_timezone(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)

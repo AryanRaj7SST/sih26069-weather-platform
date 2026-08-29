@@ -1,7 +1,5 @@
 import logging
-from typing import Callable, Dict, List, Optional
-
-from app.ingestion.base import BaseIngestionAdapter
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -10,22 +8,20 @@ class AdapterRegistry:
     """Singleton registry for discovering and managing data ingestion adapters."""
 
     def __init__(self) -> None:
-        self._adapters: Dict[str, BaseIngestionAdapter] = {}
-        self._factories: Dict[str, Callable[[], BaseIngestionAdapter]] = {}
+        self._adapters: Dict[str, Any] = {}
+        self._factories: Dict[str, Callable[[], Any]] = {}
 
-    def register(self, adapter: BaseIngestionAdapter) -> None:
+    def register(self, adapter: Any) -> None:
         """Register an instantiated adapter."""
         code = adapter.source_code.upper()
         self._adapters[code] = adapter
         logger.info(f"Registered ingestion adapter: {code} ({adapter.source_name})")
 
-    def register_factory(
-        self, source_code: str, factory: Callable[[], BaseIngestionAdapter]
-    ) -> None:
+    def register_factory(self, source_code: str, factory: Callable[[], Any]) -> None:
         """Register an adapter factory for lazy instantiation."""
         self._factories[source_code.upper()] = factory
 
-    def get(self, source_code: str) -> Optional[BaseIngestionAdapter]:
+    def get(self, source_code: str) -> Optional[Any]:
         """Retrieve an adapter by source code."""
         code = source_code.upper()
         if code in self._adapters:
@@ -36,7 +32,7 @@ class AdapterRegistry:
             return instance
         return None
 
-    def list_adapters(self) -> List[BaseIngestionAdapter]:
+    def list_adapters(self) -> List[Any]:
         """List all active registered adapters."""
         return list(self._adapters.values())
 

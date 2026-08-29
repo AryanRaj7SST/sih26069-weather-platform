@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     IMD_REQUEST_TIMEOUT_SECONDS: float = 15.0
     NDMA_SACHET_RSS_URL: str = "https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails"
     NDMA_REQUEST_TIMEOUT_SECONDS: float = 15.0
+    CWC_NWDP_API_ENDPOINT: str = "https://nwdp.nwic.gov.in/api/3/action/datastore_search"
+    CWC_NWDP_RESOURCE_ID: str = "d80798b9-4b11-4626-8b63-964202ba7216"
+    CWC_REQUEST_TIMEOUT_SECONDS: float = 15.0
+    CWC_FETCH_LIMIT: int = 50
 
     # AI & Semantic Intelligence (Optional in Phase 1)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
