@@ -463,7 +463,7 @@ class ReportService:
             occurred_at=event.occurred_at,
             processing_status="COMPLETED",
             verification_status="PENDING",
-            credibility_score=source.base_trust_score,
+            credibility_score=0.0,
             raw_payload=event.raw_payload,
         )
         session.add(report)

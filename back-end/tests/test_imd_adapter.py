@@ -10,6 +10,7 @@ from app.ingestion.exceptions import AdapterFetchError
 from app.ingestion.imd_adapter import IMDNowcastAdapter
 from app.ingestion.registry import adapter_registry
 from app.models.report import WeatherReport
+from app.models.source import Source
 from app.services.report_service import report_service
 
 # ---------------------------------------------------------------------------
@@ -250,7 +251,13 @@ async def test_imd_ingestion_persistence_and_idempotency():
         assert report1 is not None
         assert report1.external_id == norm_event.external_id
         assert report1.severity == "SEVERE"
-        assert report1.credibility_score == 0.90  # IMD official trust score
+        assert report1.credibility_score == 0.0  # Decoupled from source trust
+
+        # Verify source table has base_trust_score
+        src_stmt = select(Source).where(Source.id == report1.source_id)
+        src_res = await session.execute(src_stmt)
+        src = src_res.scalar_one()
+        assert src.base_trust_score == 0.90  # Source baseline trust metadata
 
         # Second persistence run (Same external ID) -> Should update, not duplicate
         report2 = await report_service.ingest_normalized_event(session, norm_event)

@@ -86,7 +86,7 @@ class EventNormalizer:
         if value is None:
             return datetime.now(timezone.utc)
 
-        parsed_dt: datetime
+        parsed_dt: Optional[datetime] = None
         if isinstance(value, datetime):
             parsed_dt = value
         elif isinstance(value, (int, float)):
@@ -98,38 +98,53 @@ class EventNormalizer:
                 )
         elif isinstance(value, str):
             clean_str = value.strip()
-            # Try standard ISO-8601 parsing
-            try:
-                parsed_dt = datetime.fromisoformat(clean_str.replace("Z", "+00:00"))
-            except ValueError:
-                # Try common fallback date formats
-                fallback_formats = [
-                    "%Y-%m-%d %H:%M:%S",
-                    "%Y-%m-%dT%H:%M:%S",
-                    "%Y-%m-%d",
-                    "%d-%m-%Y %H:%M:%S",
-                    "%d/%m/%Y %H:%M:%S",
-                    "%a, %d %b %Y %H:%M:%S %z",
-                    "%a, %d %b %Y %H:%M:%S GMT",
-                ]
-                matched = False
-                for fmt in fallback_formats:
-                    try:
-                        parsed_dt = datetime.strptime(clean_str, fmt)
-                        matched = True
-                        break
-                    except ValueError:
-                        continue
-                if not matched:
-                    raise NormalizationError(
-                        f"Unrecognized date/time format: '{clean_str}'",
-                        field="occurred_at",
-                    )
+
+            # Handle Indian Standard Time (IST) text format: 'Sat Aug 29 12:48:00 IST 2026'
+            if "IST" in clean_str:
+                try:
+                    # Remove multiple spaces after replacing IST
+                    stripped_ist = re.sub(r"\s+", " ", clean_str.replace("IST", "")).strip()
+                    dt_no_tz = datetime.strptime(stripped_ist, "%a %b %d %H:%M:%S %Y")
+                    ist_tz = timezone(timedelta(hours=5, minutes=30))
+                    parsed_dt = dt_no_tz.replace(tzinfo=ist_tz)
+                except ValueError:
+                    pass
+
+            if parsed_dt is None:
+                # Try standard ISO-8601 parsing
+                try:
+                    parsed_dt = datetime.fromisoformat(clean_str.replace("Z", "+00:00"))
+                except ValueError:
+                    # Try common fallback date formats
+                    fallback_formats = [
+                        "%Y-%m-%d %H:%M:%S",
+                        "%Y-%m-%dT%H:%M:%S",
+                        "%Y-%m-%d",
+                        "%d-%m-%Y %H:%M:%S",
+                        "%d/%m/%Y %H:%M:%S",
+                        "%a, %d %b %Y %H:%M:%S %z",
+                        "%a, %d %b %Y %H:%M:%S GMT",
+                        "%a %b %d %H:%M:%S %Y",
+                    ]
+                    matched = False
+                    for fmt in fallback_formats:
+                        try:
+                            parsed_dt = datetime.strptime(clean_str, fmt)
+                            matched = True
+                            break
+                        except ValueError:
+                            continue
+                    if not matched:
+                        raise NormalizationError(
+                            f"Unrecognized date/time format: '{clean_str}'",
+                            field="occurred_at",
+                        )
         else:
             raise NormalizationError(
                 f"Unsupported timestamp type '{type(value)}'", field="occurred_at"
             )
 
+        assert parsed_dt is not None
         if parsed_dt.tzinfo is None:
             parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
         else:

@@ -122,6 +122,7 @@ S3_USE_SSL=false
 DATA_GOV_API_KEY=
 IMD_API_ENDPOINT=https://api.imd.gov.in/api/v1
 IMD_API_KEY=
+NDMA_SACHET_RSS_URL=https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails
 
 # AI & Semantic Intelligence
 EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
