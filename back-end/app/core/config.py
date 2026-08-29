@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     DUPLICATE_POSSIBLE_THRESHOLD: float = 0.55
     DUPLICATE_CANDIDATE_LIMIT: int = 50
     DUPLICATE_ENGINE_VERSION: str = "v1"
+    # Evidence Linking Engine (v1 Initial Parameters)
+    EVIDENCE_LINK_ENGINE_VERSION: str = "v1"
+    EVIDENCE_SPATIAL_RADIUS_METERS: float = 25000.0
+    EVIDENCE_TIME_WINDOW_HOURS: float = 48.0
+    EVIDENCE_SUPPORTING_THRESHOLD: float = 0.65
+    EVIDENCE_RELATED_THRESHOLD: float = 0.45
+    EVIDENCE_CONTEXTUAL_THRESHOLD: float = 0.35
+    EVIDENCE_CANDIDATE_LIMIT: int = 50
     LLM_PROVIDER: str = "none"
     LLM_API_KEY: str = ""
 

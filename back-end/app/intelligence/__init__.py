@@ -1,4 +1,4 @@
-"""AI, classification, entity resolution, deduplication, and intelligence engine package."""
+"""AI, classification, deduplication, evidence linking, and intelligence package."""
 
 from app.intelligence.candidate_generator import CandidateGenerator, candidate_generator
 from app.intelligence.category_rules import (
@@ -15,6 +15,19 @@ from app.intelligence.evaluation_dataset import (
     evaluate_threshold_sensitivity,
     run_benchmark_evaluation,
 )
+from app.intelligence.evidence_candidate_generator import (
+    EvidenceCandidateGenerator,
+    evidence_candidate_generator,
+)
+from app.intelligence.evidence_evaluation_dataset import (
+    EVIDENCE_BENCHMARK_PAIRS,
+    run_evidence_benchmark_evaluation,
+)
+from app.intelligence.evidence_linking_engine import (
+    EvidenceLinkingEngine,
+    evidence_linking_engine,
+)
+from app.intelligence.evidence_scorer import EvidenceScorer, evidence_scorer
 from app.intelligence.extractor import EntityExtractor, entity_extractor
 from app.intelligence.resolver import LocationResolver, location_resolver
 from app.intelligence.schemas import (
@@ -23,6 +36,10 @@ from app.intelligence.schemas import (
     DuplicateAssessment,
     DuplicateDecision,
     DuplicateSignalBreakdown,
+    EvidenceLinkAssessment,
+    EvidenceLinkResult,
+    EvidenceLinkSignalBreakdown,
+    EvidenceRelationship,
     ExtractedEntity,
     LocationCandidate,
     LocationResolutionResult,
@@ -45,6 +62,10 @@ __all__ = [
     "DuplicateAssessment",
     "CandidateQueryResult",
     "ClusterAssignmentResult",
+    "EvidenceRelationship",
+    "EvidenceLinkSignalBreakdown",
+    "EvidenceLinkAssessment",
+    "EvidenceLinkResult",
     "EntityExtractor",
     "entity_extractor",
     "LocationResolver",
@@ -62,4 +83,12 @@ __all__ = [
     "BENCHMARK_EVALUATION_PAIRS",
     "run_benchmark_evaluation",
     "evaluate_threshold_sensitivity",
+    "EvidenceScorer",
+    "evidence_scorer",
+    "EvidenceCandidateGenerator",
+    "evidence_candidate_generator",
+    "EvidenceLinkingEngine",
+    "evidence_linking_engine",
+    "EVIDENCE_BENCHMARK_PAIRS",
+    "run_evidence_benchmark_evaluation",
 ]

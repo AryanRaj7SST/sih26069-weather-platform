@@ -193,3 +193,84 @@ class ClusterAssignmentResult(BaseModel):
     assessment: Optional[DuplicateAssessment] = Field(
         default=None, description="Detailed assessment with the best candidate match."
     )
+
+
+class EvidenceRelationship(str, Enum):
+    """Semantic relationship between an external evidence item and an incident."""
+
+    SUPPORTING = "SUPPORTING"
+    RELATED = "RELATED"
+    CONTEXTUAL = "CONTEXTUAL"
+    CONTRADICTORY = "CONTRADICTORY"
+    IRRELEVANT = "IRRELEVANT"
+
+
+class EvidenceLinkSignalBreakdown(BaseModel):
+    """Signal decomposition for evidence-to-incident link assessment."""
+
+    spatial_distance_meters: Optional[float] = Field(
+        default=None, description="Distance between evidence location and incident (meters)."
+    )
+    spatial_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Spatial proximity score."
+    )
+    temporal_delta_hours: Optional[float] = Field(
+        default=None, description="Time delta between evidence publication and incident (hours)."
+    )
+    temporal_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Temporal alignment score."
+    )
+    semantic_similarity: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Text vector semantic cosine similarity."
+    )
+    entity_compatibility_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Named location entity match score."
+    )
+    category_relevance_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Hazard category relevance score."
+    )
+    source_context_score: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Source provenance context score."
+    )
+
+
+class EvidenceLinkAssessment(BaseModel):
+    """Source-neutral assessment comparing an evidence item against a weather incident."""
+
+    incident_id: uuid.UUID = Field(..., description="ID of the target WeatherReport.")
+    evidence_id: uuid.UUID = Field(..., description="ID of the source EvidenceItem.")
+    relationship_type: EvidenceRelationship = Field(
+        ..., description="Assessed relationship classification."
+    )
+    overall_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Composite link confidence score."
+    )
+    signals: EvidenceLinkSignalBreakdown = Field(..., description="Decomposed signal breakdown.")
+    explanation: str = Field(..., description="Explainable human-readable decision summary.")
+    engine_version: str = Field(
+        default="v1", description="Evidence linking engine version identifier."
+    )
+    policy_version: str = Field(
+        default="v1", description="Evidence linking policy version identifier."
+    )
+    semantic_method: str = Field(
+        default="sparse_tfidf_ngram_v1",
+        description="Semantic text vectorization method utilized.",
+    )
+    assessed_at: datetime = Field(..., description="UTC assessment timestamp.")
+
+
+class EvidenceLinkResult(BaseModel):
+    """Result of evidence linking evaluation including persistence details."""
+
+    link_id: Optional[uuid.UUID] = Field(
+        default=None, description="Assigned IncidentEvidenceLink ID if linked."
+    )
+    incident_id: uuid.UUID = Field(..., description="Target incident ID.")
+    evidence_id: uuid.UUID = Field(..., description="Evidence item ID.")
+    relationship_type: EvidenceRelationship = Field(..., description="Relationship decision.")
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence score.")
+    is_linked: bool = Field(
+        default=False, description="True if link was established and persisted."
+    )
+    assessment: EvidenceLinkAssessment = Field(..., description="Underlying assessment details.")
