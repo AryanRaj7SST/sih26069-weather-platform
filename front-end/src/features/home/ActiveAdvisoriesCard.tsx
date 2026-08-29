@@ -8,8 +8,16 @@ import { IncidentSummary } from '@/types';
 
 export const ActiveAdvisoriesCard: React.FC = () => {
   const { data, isLoading, isError } = useQuery({
-    queryKey: incidentKeys.list({ page_size: 4 }),
-    queryFn: () => incidentApi.listIncidents({ page: 1, page_size: 4 }),
+    queryKey: incidentKeys.list({
+      verification_status: 'PENDING,UNDER_REVIEW,VERIFIED',
+      page_size: 4,
+    }),
+    queryFn: () =>
+      incidentApi.listIncidents({
+        verification_status: 'PENDING,UNDER_REVIEW,VERIFIED',
+        page: 1,
+        page_size: 4,
+      }),
     staleTime: 1000 * 60 * 2,
   });
 
@@ -79,8 +87,12 @@ export const ActiveAdvisoriesCard: React.FC = () => {
             {incidents.map((item) => {
               const isSevere = item.severity === 'SEVERE';
               const isHigh = item.severity === 'HIGH';
+              const isPendingAssessment =
+                item.credibility_score == null ||
+                item.credibility_score === 0 ||
+                item.readiness === 'INTELLIGENCE_PENDING';
               const credScorePct =
-                item.credibility_score != null ? Math.round(item.credibility_score * 100) : 0;
+                item.credibility_score != null ? Math.round(item.credibility_score * 100) : null;
 
               return (
                 <Link
@@ -115,17 +127,27 @@ export const ActiveAdvisoriesCard: React.FC = () => {
 
                   {/* Real Machine Credibility Metric */}
                   <div className="mt-2.5">
-                    <div className="flex justify-between text-[10px] font-semibold text-slate-600">
+                    <div className="flex justify-between items-center text-[10px] font-semibold text-slate-600">
                       <span>Machine Credibility</span>
-                      <span className="font-mono text-slate-800">{credScorePct}%</span>
+                      {isPendingAssessment ? (
+                        <span className="font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 text-[9px]">
+                          Pending Assessment
+                        </span>
+                      ) : (
+                        <span className="font-mono text-slate-800">{credScorePct}%</span>
+                      )}
                     </div>
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          isSevere ? 'bg-rose-500' : isHigh ? 'bg-orange-500' : 'bg-blue-600'
-                        }`}
-                        style={{ width: `${Math.max(5, Math.min(100, credScorePct))}%` }}
-                      />
+                      {isPendingAssessment ? (
+                        <div className="h-full rounded-full bg-amber-400/80 animate-pulse w-2/3" />
+                      ) : (
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            isSevere ? 'bg-rose-500' : isHigh ? 'bg-orange-500' : 'bg-blue-600'
+                          }`}
+                          style={{ width: `${Math.max(5, Math.min(100, credScorePct ?? 0))}%` }}
+                        />
+                      )}
                     </div>
                   </div>
                 </Link>

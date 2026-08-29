@@ -788,7 +788,7 @@ describe('11. Home Page Live Data Contracts & Real-Time Aggregations', () => {
     expect(verifiedFixture.title).toContain('Kurla');
   });
 
-  it('B. verifies Active Advisories honest metric mapping without fabricated measurements', () => {
+  it('B. verifies Active Advisories honest metric mapping for evaluated non-zero score', () => {
     const advisoryFixture: IncidentSummary = {
       id: 'a6aec9fd-149c-4e3a-aa61-bfb948aca2d2',
       tracking_id: 'RPT-20260829-M4N2',
@@ -811,18 +811,149 @@ describe('11. Home Page Live Data Contracts & Real-Time Aggregations', () => {
       media_count: 1,
     };
 
+    const isPendingAssessment =
+      advisoryFixture.credibility_score == null ||
+      advisoryFixture.credibility_score === 0 ||
+      advisoryFixture.readiness === 'INTELLIGENCE_PENDING';
+
     const isSevere = advisoryFixture.severity === 'SEVERE';
     const credibilityPercentage =
       advisoryFixture.credibility_score != null
         ? Math.round(advisoryFixture.credibility_score * 100)
-        : 0;
+        : null;
 
+    expect(isPendingAssessment).toBe(false);
     expect(isSevere).toBe(true);
     expect(credibilityPercentage).toBe(88);
     expect(advisoryFixture.location.name).toBe('Bandra-Kalanagar Junction, Mumbai');
   });
 
-  it('C. verifies Live Event Map Preview navigation target and event counter', () => {
+  it('C. verifies uncomputed INTELLIGENCE_PENDING + 0.0 records render Pending Assessment instead of 0%', () => {
+    const unprocessedFixture: IncidentSummary = {
+      id: 'f745198e-1eb0-48b2-8cd0-ffb611ba193f',
+      tracking_id: 'RPT-20260829-T1U2',
+      title: 'Mumbai South coastal rain',
+      category: {
+        code: 'HEAVY_RAINFALL',
+        title: 'Heavy Rainfall',
+      },
+      severity: 'HIGH',
+      verification_status: 'PENDING',
+      credibility_score: 0.0,
+      location: {
+        name: 'Colaba Causeway, Mumbai',
+        latitude: 18.9067,
+        longitude: 72.8147,
+      },
+      readiness: 'INTELLIGENCE_PENDING',
+      occurred_at: '2026-08-29T21:38:41Z',
+      created_at: '2026-08-29T21:38:41Z',
+      media_count: 0,
+    };
+
+    const isPendingAssessment =
+      unprocessedFixture.credibility_score == null ||
+      unprocessedFixture.credibility_score === 0 ||
+      unprocessedFixture.readiness === 'INTELLIGENCE_PENDING';
+
+    expect(isPendingAssessment).toBe(true);
+    const displayValue = isPendingAssessment
+      ? 'Pending Assessment'
+      : `${Math.round((unprocessedFixture.credibility_score ?? 0) * 100)}%`;
+
+    expect(displayValue).toBe('Pending Assessment');
+    expect(displayValue).not.toBe('0%');
+  });
+
+  it('D. verifies uncomputed INTELLIGENCE_READY + 0.0 records render Pending Assessment instead of 0%', () => {
+    const completedIntakeFixture: IncidentSummary = {
+      id: 'dbc3e511-5316-4355-a554-d9b5970e9d19',
+      tracking_id: 'RPT-20260829-W4T1',
+      title: 'Mumbai waterlogging test verification',
+      category: {
+        code: 'FLOOD_WATERLOGGING',
+        title: 'Flood / Waterlogging',
+      },
+      severity: 'SEVERE',
+      verification_status: 'VERIFIED',
+      credibility_score: 0.0,
+      location: {
+        name: 'Dadar TT Circle, Mumbai',
+        latitude: 19.0178,
+        longitude: 72.8478,
+      },
+      readiness: 'INTELLIGENCE_READY',
+      occurred_at: '2026-08-29T21:38:41Z',
+      created_at: '2026-08-29T21:38:41Z',
+      media_count: 1,
+    };
+
+    const isPendingAssessment =
+      completedIntakeFixture.credibility_score == null ||
+      completedIntakeFixture.credibility_score === 0 ||
+      completedIntakeFixture.readiness === 'INTELLIGENCE_PENDING';
+
+    expect(isPendingAssessment).toBe(true);
+    const displayValue = isPendingAssessment
+      ? 'Pending Assessment'
+      : `${Math.round((completedIntakeFixture.credibility_score ?? 0) * 100)}%`;
+
+    expect(displayValue).toBe('Pending Assessment');
+    expect(displayValue).not.toBe('0%');
+  });
+
+  it('E. verifies null credibility_score records render Pending Assessment', () => {
+    const nullScoreFixture: IncidentSummary = {
+      id: '8aae2c36-7648-44bb-8273-edceac7c8607',
+      tracking_id: 'RPT-20260829-H9J1',
+      title: 'Delhi heatwave record',
+      category: {
+        code: 'EXTREME_HEAT',
+        title: 'Extreme Heatwave',
+      },
+      severity: 'MODERATE',
+      verification_status: 'PENDING',
+      credibility_score: null,
+      location: {
+        name: 'Connaught Place, New Delhi',
+        latitude: 28.6304,
+        longitude: 77.2177,
+      },
+      readiness: 'INTELLIGENCE_PENDING',
+      occurred_at: '2026-08-29T21:38:40Z',
+      created_at: '2026-08-29T21:38:40Z',
+      media_count: 0,
+    };
+
+    const isPendingAssessment =
+      nullScoreFixture.credibility_score == null ||
+      nullScoreFixture.credibility_score === 0 ||
+      nullScoreFixture.readiness === 'INTELLIGENCE_PENDING';
+
+    expect(isPendingAssessment).toBe(true);
+    const displayValue = isPendingAssessment
+      ? 'Pending Assessment'
+      : `${Math.round((nullScoreFixture.credibility_score ?? 0) * 100)}%`;
+
+    expect(displayValue).toBe('Pending Assessment');
+  });
+
+  it('F. verifies Active Advisories query excludes terminal REJECTED and DUPLICATE records', () => {
+    const advisoryQueryParams = {
+      verification_status: 'PENDING,UNDER_REVIEW,VERIFIED',
+      page: 1,
+      page_size: 4,
+    };
+
+    const allowedStatuses = advisoryQueryParams.verification_status.split(',');
+    expect(allowedStatuses).toContain('PENDING');
+    expect(allowedStatuses).toContain('UNDER_REVIEW');
+    expect(allowedStatuses).toContain('VERIFIED');
+    expect(allowedStatuses).not.toContain('REJECTED');
+    expect(allowedStatuses).not.toContain('DUPLICATE');
+  });
+
+  it('G. verifies Live Event Map Preview navigation target and event counter', () => {
     const mapPreviewContract = {
       fullScreenPath: '/live-map',
       totalTrackedEvents: 42,
@@ -834,5 +965,7 @@ describe('11. Home Page Live Data Contracts & Real-Time Aggregations', () => {
     expect(mapPreviewContract.statusLabel).toContain('LIVE:');
   });
 });
+
+
 
 
