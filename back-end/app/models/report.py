@@ -20,7 +20,9 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.category import EventCategory
+    from app.models.corroboration import IncidentObservationCorroboration
     from app.models.duplicate import DuplicateCluster, DuplicateMember
+    from app.models.evidence import IncidentEvidenceLink
     from app.models.media import ReportMedia
     from app.models.source import Source
     from app.models.verification import VerificationEvent
@@ -162,6 +164,16 @@ class WeatherReport(Base):
         "DuplicateCluster",
         back_populates="primary_report",
         foreign_keys="DuplicateCluster.primary_report_id",
+    )
+    evidence_links: Mapped[List["IncidentEvidenceLink"]] = relationship(
+        "IncidentEvidenceLink",
+        back_populates="report",
+        cascade="all, delete-orphan",
+    )
+    corroborations: Mapped[List["IncidentObservationCorroboration"]] = relationship(
+        "IncidentObservationCorroboration",
+        back_populates="report",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (

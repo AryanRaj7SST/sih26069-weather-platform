@@ -1,7 +1,9 @@
 from app.db.base import Base
 from app.models.audit import AuditLog
 from app.models.category import EventCategory
+from app.models.corroboration import IncidentObservationCorroboration
 from app.models.duplicate import DuplicateCluster, DuplicateMember
+from app.models.evidence import EvidenceItem, IncidentEvidenceLink
 from app.models.ingestion import IngestionRun
 from app.models.media import ReportMedia
 from app.models.observation import WeatherObservation
@@ -18,6 +20,9 @@ __all__ = [
     "WeatherReport",
     "ReportMedia",
     "WeatherObservation",
+    "EvidenceItem",
+    "IncidentEvidenceLink",
+    "IncidentObservationCorroboration",
     "DuplicateCluster",
     "DuplicateMember",
     "VerificationEvent",

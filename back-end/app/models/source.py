@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.evidence import EvidenceItem
     from app.models.ingestion import IngestionRun
     from app.models.observation import WeatherObservation
     from app.models.report import WeatherReport
@@ -61,6 +62,10 @@ class Source(Base):
     )
     weather_observations: Mapped[List["WeatherObservation"]] = relationship(
         "WeatherObservation",
+        back_populates="source",
+    )
+    evidence_items: Mapped[List["EvidenceItem"]] = relationship(
+        "EvidenceItem",
         back_populates="source",
     )
     ingestion_runs: Mapped[List["IngestionRun"]] = relationship(

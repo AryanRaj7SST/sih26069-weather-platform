@@ -1,15 +1,16 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from geoalchemy2 import Geometry
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.corroboration import IncidentObservationCorroboration
     from app.models.source import Source
 
 
@@ -25,6 +26,11 @@ class WeatherObservation(Base):
         UUID(as_uuid=True),
         ForeignKey("sources.id"),
         nullable=False,
+    )
+    external_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
     )
     station_code: Mapped[str] = mapped_column(
         String(50),
@@ -56,6 +62,10 @@ class WeatherObservation(Base):
         Float,
         nullable=True,
     )
+    water_level_m: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+    )
     wind_speed_kmh: Mapped[Optional[float]] = mapped_column(
         Float,
         nullable=True,
@@ -82,4 +92,18 @@ class WeatherObservation(Base):
     source: Mapped["Source"] = relationship(
         "Source",
         back_populates="weather_observations",
+    )
+    corroborations: Mapped[List["IncidentObservationCorroboration"]] = relationship(
+        "IncidentObservationCorroboration",
+        back_populates="observation",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("idx_weather_observations_source_external", "source_id", "external_id"),
+        Index(
+            "idx_weather_observations_station_time",
+            "station_code",
+            observed_at.desc(),
+        ),
     )

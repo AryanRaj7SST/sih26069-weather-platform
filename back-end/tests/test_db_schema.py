@@ -17,6 +17,9 @@ def test_models_metadata_registration():
         "weather_reports",
         "report_media",
         "weather_observations",
+        "evidence_items",
+        "incident_evidence_links",
+        "incident_observation_corroborations",
         "duplicate_clusters",
         "duplicate_members",
         "verification_events",
@@ -85,8 +88,10 @@ async def test_schema_tables_exist_in_database(db_session: AsyncSession):
             "WHERE table_schema = 'public' "
             "AND table_name IN ("
             "'users', 'sources', 'event_categories', 'weather_reports', "
-            "'report_media', 'weather_observations', 'duplicate_clusters', "
-            "'duplicate_members', 'verification_events', 'ingestion_runs', 'audit_logs'"
+            "'report_media', 'weather_observations', 'evidence_items', "
+            "'incident_evidence_links', 'incident_observation_corroborations', "
+            "'duplicate_clusters', 'duplicate_members', 'verification_events', "
+            "'ingestion_runs', 'audit_logs'"
             ");"
         )
     )
@@ -98,10 +103,13 @@ async def test_schema_tables_exist_in_database(db_session: AsyncSession):
         "weather_reports",
         "report_media",
         "weather_observations",
+        "evidence_items",
+        "incident_evidence_links",
+        "incident_observation_corroborations",
         "duplicate_clusters",
         "duplicate_members",
         "verification_events",
         "ingestion_runs",
         "audit_logs",
     }
-    assert tables == expected
+    assert expected.issubset(tables), f"Missing tables in PostgreSQL: {expected - tables}"
