@@ -1,5 +1,11 @@
-from fastapi import FastAPI
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
@@ -23,6 +29,53 @@ def create_application() -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+        )
+
+    # Custom Exception Handlers adhering to API_CONTRACT.md
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        detail = exc.detail
+        code = "HTTP_ERROR"
+        message = str(detail)
+        details: list[Any] = []
+
+        if isinstance(detail, dict):
+            code = detail.get("code", "HTTP_ERROR")
+            message = detail.get("message", str(detail))
+            details = detail.get("details", detail.get("errors", []))
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "error": {
+                    "code": code,
+                    "message": message,
+                    "details": details if isinstance(details, list) else [details],
+                },
+                "meta": {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "request_id": f"req_{uuid.uuid4().hex[:12]}",
+                },
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "success": False,
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid request parameters or payload structure",
+                    "details": exc.errors(),
+                },
+                "meta": {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "request_id": f"req_{uuid.uuid4().hex[:12]}",
+                },
+            },
         )
 
     # Register API v1 routes
