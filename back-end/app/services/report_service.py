@@ -5,8 +5,9 @@ from typing import List, Optional, Tuple
 
 from fastapi import UploadFile
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.category import EventCategory
@@ -163,6 +164,39 @@ class ReportService:
             for key in uploaded_keys:
                 self.storage.delete_media_file(key, bucket_name=settings.S3_BUCKET_NAME)
             raise
+
+    async def get_report_by_id_or_tracking(
+        self, session: AsyncSession, identifier: str
+    ) -> Optional[WeatherReport]:
+        """Fetch a single report by tracking ID or UUID primary key."""
+        clean_id = identifier.strip()
+        if not clean_id:
+            return None
+
+        # Check if identifier can be parsed as a UUID
+        parsed_uuid: Optional[uuid.UUID] = None
+        try:
+            parsed_uuid = uuid.UUID(clean_id)
+        except ValueError:
+            parsed_uuid = None
+
+        stmt = select(WeatherReport).options(
+            selectinload(WeatherReport.category),
+            selectinload(WeatherReport.media),
+        )
+
+        if parsed_uuid is not None:
+            stmt = stmt.where(
+                or_(
+                    WeatherReport.id == parsed_uuid,
+                    WeatherReport.tracking_id == clean_id,
+                )
+            )
+        else:
+            stmt = stmt.where(WeatherReport.tracking_id == clean_id)
+
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
 
 
 report_service = ReportService()

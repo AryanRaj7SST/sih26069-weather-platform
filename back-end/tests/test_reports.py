@@ -124,7 +124,7 @@ async def test_submit_citizen_report_with_media():
                 Key=media_record.storage_key,
             )
             downloaded_bytes = s3_obj["Body"].read()
-            assert downloaded_bytes == b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfake_png_binary_data"
+            assert downloaded_bytes == fake_png_data
 
 
 @pytest.mark.asyncio
@@ -221,3 +221,120 @@ async def test_tracking_id_uniqueness():
         id1 = res1.json()["data"]["tracking_id"]
         id2 = res2.json()["data"]["tracking_id"]
         assert id1 != id2
+
+
+@pytest.mark.asyncio
+async def test_get_report_by_tracking_id_success():
+    """Test retrieving public status of a report using its tracking ID."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Create a report
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "28.6139",
+                "longitude": "77.2090",
+                "category_code": "EXTREME_HEAT",
+                "severity": "HIGH",
+                "title": "Heatwave alert in Central Delhi",
+                "description": "Temperature crossed 45 degrees Celsius.",
+                "location_name": "Connaught Place, New Delhi",
+            },
+        )
+        assert create_res.status_code == 201
+        tracking_id = create_res.json()["data"]["tracking_id"]
+        report_id = create_res.json()["data"]["id"]
+
+        # Look up by tracking ID
+        get_res = await client.get(f"/api/v1/reports/{tracking_id}")
+        assert get_res.status_code == 200
+        json_data = get_res.json()
+
+        assert json_data["success"] is True
+        data = json_data["data"]
+        assert data["id"] == report_id
+        assert data["tracking_id"] == tracking_id
+        assert data["title"] == "Heatwave alert in Central Delhi"
+        assert data["severity"] == "HIGH"
+        assert data["processing_status"] == "QUEUED"
+        assert data["verification_status"] == "PENDING"
+        assert data["credibility_score"] == 0.0
+        assert data["location"]["latitude"] == 28.6139
+        assert data["location"]["longitude"] == 77.2090
+        assert data["location"]["name"] == "Connaught Place, New Delhi"
+        assert data["category"]["code"] == "EXTREME_HEAT"
+
+
+@pytest.mark.asyncio
+async def test_get_report_by_uuid_success():
+    """Test retrieving report using its UUID."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "12.9716",
+                "longitude": "77.5946",
+                "category_code": "URBAN_FLOOD",
+                "severity": "MODERATE",
+                "title": "Waterlogging in Koramangala",
+                "location_name": "Koramangala 4th Block, Bengaluru",
+            },
+        )
+        assert create_res.status_code == 201
+        report_id = create_res.json()["data"]["id"]
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        get_res = await client.get(f"/api/v1/reports/{report_id}")
+        assert get_res.status_code == 200
+        data = get_res.json()["data"]
+        assert data["id"] == report_id
+        assert data["tracking_id"] == tracking_id
+
+
+@pytest.mark.asyncio
+async def test_get_report_nonexistent_returns_404():
+    """Test that looking up a nonexistent tracking ID returns 404 with standard error envelope."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/reports/RPT-20260101-NONEXISTENT")
+        assert response.status_code == 404
+        json_data = response.json()
+        assert json_data["success"] is False
+        assert json_data["error"]["code"] == "RESOURCE_NOT_FOUND"
+        assert "does not exist" in json_data["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_get_report_malformed_id_returns_422():
+    """Test that malformed identifier (spaces, invalid symbols) returns 422 validation error."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/reports/bad%20id%20with%20spaces!")
+        assert response.status_code == 422
+        json_data = response.json()
+        assert json_data["success"] is False
+        assert json_data["error"]["code"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_get_report_privacy_no_internal_leak():
+    """Test that public tracking response excludes internal DB keys, audit logs, and secrets."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "19.0760",
+                "longitude": "72.8777",
+                "category_code": "CYCLONE_STORM",
+                "severity": "SEVERE",
+                "title": "Severe coastal wind gusts",
+            },
+        )
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        get_res = await client.get(f"/api/v1/reports/{tracking_id}")
+        data = get_res.json()["data"]
+
+        # Ensure private/internal fields are NOT present in public response
+        assert "source_id" not in data
+        assert "raw_payload" not in data
+        assert "text_embedding" not in data
+        assert "credibility_explanation" not in data
+        assert "audit_logs" not in data

@@ -110,6 +110,11 @@ class StorageService:
 
         return storage_key, sha256_hash, file_size, media_type
 
+    def get_media_url(self, storage_key: str, bucket_name: Optional[str] = None) -> str:
+        """Construct the public HTTP access URL for a stored media object."""
+        target_bucket = bucket_name or self.default_bucket
+        return f"{self.endpoint_url}/{target_bucket}/{storage_key}"
+
     def delete_media_file(self, storage_key: str, bucket_name: Optional[str] = None) -> None:
         """Delete an object from storage (e.g. on transaction rollback)."""
         target_bucket = bucket_name or self.default_bucket

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -100,4 +100,56 @@ class ReportSubmitResponse(BaseModel):
 
     success: bool = True
     data: ReportSubmitData
+    meta: Dict[str, Any]
+
+
+class CategoryDetail(BaseModel):
+    """Category representation in report lookup."""
+
+    code: str
+    title: str
+
+
+class LocationDetail(BaseModel):
+    """Location coordinates and locality in report lookup."""
+
+    name: Optional[str] = None
+    latitude: float
+    longitude: float
+
+
+class MediaDetail(BaseModel):
+    """Public media metadata item in report lookup."""
+
+    id: uuid.UUID
+    media_type: str
+    url: str
+    sha256_hash: str
+
+
+class ReportDetailData(BaseModel):
+    """Public report tracking data payload."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tracking_id: str
+    title: str
+    description: Optional[str] = None
+    category: CategoryDetail
+    severity: str
+    location: LocationDetail
+    occurred_at: datetime
+    processing_status: str
+    verification_status: str
+    credibility_score: float = 0.0
+    media: List[MediaDetail] = []
+    created_at: datetime
+
+
+class ReportDetailResponse(BaseModel):
+    """Standard API envelope for report tracking lookup."""
+
+    success: bool = True
+    data: ReportDetailData
     meta: Dict[str, Any]
