@@ -5,4 +5,7 @@ export * from './CitizenReportPage';
 export * from './TrackReportPage';
 export * from './AdminVerificationQueuePage';
 export * from './AnalyticsPage';
+export * from './LoginPage';
+export * from './IncidentListPage';
+export * from './IncidentDetailPage';
 

@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
+// Live Map Container with Debounced Viewport Queries & Null Coordinate Protection
+
+import React, { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Plus, Minus, Compass, Locate } from 'lucide-react';
@@ -35,7 +37,7 @@ const MapController: React.FC<{
   const map = useMap();
 
   useEffect(() => {
-    if (selectedReport?.location?.latitude && selectedReport?.location?.longitude) {
+    if (selectedReport?.location?.latitude != null && selectedReport?.location?.longitude != null) {
       map.flyTo([selectedReport.location.latitude, selectedReport.location.longitude], 11, {
         duration: 1.2,
       });
@@ -53,28 +55,45 @@ const MapController: React.FC<{
   return null;
 };
 
-// Viewport change detector to calculate bbox
+// Viewport change detector with ~300ms debouncing and cleanup
 const ViewportListener: React.FC<{ onBoundsChange?: (bbox: string) => void }> = ({
   onBoundsChange,
 }) => {
+  const debounceTimerRef = useRef<number | null>(null);
+
   const map = useMapEvents({
     moveend: () => {
       if (!onBoundsChange) return;
-      const bounds = map.getBounds();
-      const southWest = bounds.getSouthWest();
-      const northEast = bounds.getNorthEast();
 
-      const minLon = Math.max(-180, Math.min(180, southWest.lng));
-      const minLat = Math.max(-90, Math.min(90, southWest.lat));
-      const maxLon = Math.max(-180, Math.min(180, northEast.lng));
-      const maxLat = Math.max(-90, Math.min(90, northEast.lat));
-
-      if (minLon <= maxLon && minLat <= maxLat) {
-        const bbox = `${minLon.toFixed(4)},${minLat.toFixed(4)},${maxLon.toFixed(4)},${maxLat.toFixed(4)}`;
-        onBoundsChange(bbox);
+      if (debounceTimerRef.current != null) {
+        window.clearTimeout(debounceTimerRef.current);
       }
+
+      debounceTimerRef.current = window.setTimeout(() => {
+        const bounds = map.getBounds();
+        const southWest = bounds.getSouthWest();
+        const northEast = bounds.getNorthEast();
+
+        const minLon = Math.max(-180, Math.min(180, southWest.lng));
+        const minLat = Math.max(-90, Math.min(90, southWest.lat));
+        const maxLon = Math.max(-180, Math.min(180, northEast.lng));
+        const maxLat = Math.max(-90, Math.min(90, northEast.lat));
+
+        if (minLon <= maxLon && minLat <= maxLat) {
+          const bbox = `${minLon.toFixed(4)},${minLat.toFixed(4)},${maxLon.toFixed(4)},${maxLat.toFixed(4)}`;
+          onBoundsChange(bbox);
+        }
+      }, 300);
     },
   });
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current != null) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   return null;
 };
@@ -194,12 +213,23 @@ export const LiveMapContainer: React.FC<LiveMapContainerProps> = ({
   const defaultCenter: [number, number] = [20.5937, 78.9629];
   const defaultZoom = 5;
 
-  // Group overlapping coordinates to handle identical test/incident coordinates cleanly
+  // Strict null check: never fabricate coordinates or render null positions
   const locationGroups = useMemo<IncidentLocationGroup[]>(() => {
     const groups: Record<string, IncidentLocationGroup> = {};
 
     for (const report of reports) {
-      if (report.location?.latitude != null && report.location?.longitude != null) {
+      if (
+        report.location?.latitude != null &&
+        report.location?.longitude != null &&
+        !isNaN(report.location.latitude) &&
+        !isNaN(report.location.longitude) &&
+        isFinite(report.location.latitude) &&
+        isFinite(report.location.longitude) &&
+        report.location.latitude >= -90 &&
+        report.location.latitude <= 90 &&
+        report.location.longitude >= -180 &&
+        report.location.longitude <= 180
+      ) {
         const latKey = report.location.latitude.toFixed(4);
         const lngKey = report.location.longitude.toFixed(4);
         const key = `${latKey}_${lngKey}`;
@@ -215,12 +245,9 @@ export const LiveMapContainer: React.FC<LiveMapContainerProps> = ({
           };
         }
         groups[key].reports.push(report);
-        // Prefer report with attached media for cluster spotlight if initial one had no media
-        if (
-          report.media &&
-          report.media.length > 0 &&
-          (!groups[key].latestReport.media || groups[key].latestReport.media.length === 0)
-        ) {
+        const hasMedia = 'media' in report && Array.isArray(report.media) && report.media.length > 0;
+        const currentHasMedia = 'media' in groups[key].latestReport && Array.isArray(groups[key].latestReport.media) && (groups[key].latestReport.media?.length ?? 0) > 0;
+        if (hasMedia && !currentHasMedia) {
           groups[key].latestReport = report;
         }
         if (report.severity === 'SEVERE' || report.severity === 'HIGH') {
@@ -241,7 +268,6 @@ export const LiveMapContainer: React.FC<LiveMapContainerProps> = ({
         className="h-full w-full z-0"
         attributionControl={true}
       >
-        {/* OpenStreetMap Standard Raster Basemap (Keyless Development) */}
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
@@ -252,7 +278,7 @@ export const LiveMapContainer: React.FC<LiveMapContainerProps> = ({
         <ViewportListener onBoundsChange={onBoundsChange} />
         <MapControls />
 
-        {/* Render markers for grouped location points */}
+        {/* Render markers only for valid coordinate groups */}
         {locationGroups.map((group) => {
           const isCluster = group.reports.length > 1;
           const isSelected = group.reports.some(

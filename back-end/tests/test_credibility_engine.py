@@ -13,6 +13,7 @@ Validates:
 10. Targeted incremental recomputation.
 """
 
+import math
 import uuid
 from datetime import datetime, timezone
 
@@ -604,6 +605,56 @@ def test_credibility_explanation_builder() -> None:
     assert SourceFamily.SENSOR in assessment.provenance.participating_families
     assert len(assessment.positive_drivers) >= 2
     assert "Machine Credibility Score" in assessment.explanation
+
+
+def test_crowd_volume_signal_explanation_and_diminishing_returns() -> None:
+    """Verify crowd signal wording and non-linear diminishing returns for k in [1, 2, 5, 18]."""
+    # 1. Test mathematical diminishing returns: s_crowd = 1 - exp(-(k-1)/3)
+    k_values = [1, 2, 5, 18]
+    scores = {}
+    for k in k_values:
+        inputs = IncidentCredibilityInputs(
+            incident_id=uuid.uuid4(),
+            source_code="CITIZEN_APP",
+            source_type="CITIZEN_REPORT",
+            source_base_trust=0.60,
+            origin_family=SourceFamily.CITIZEN,
+            cluster_member_count=k,
+        )
+        signals = credibility_scorer.score_incident(inputs)
+        scores[k] = signals.crowd_cluster_score
+
+    assert scores[1] == 0.0
+    assert abs(scores[2] - (1.0 - math.exp(-1.0 / 3.0))) < 1e-4  # ~0.2835
+    assert abs(scores[5] - (1.0 - math.exp(-4.0 / 3.0))) < 1e-4  # ~0.7364
+    assert abs(scores[18] - (1.0 - math.exp(-17.0 / 3.0))) < 1e-4  # ~0.9965
+    assert scores[1] < scores[2] < scores[5] < scores[18] <= 1.0
+
+    # 2. Test explanation builder wording:
+    test_id = uuid.uuid4()
+    inputs_18 = IncidentCredibilityInputs(
+        incident_id=test_id,
+        source_code="CITIZEN_APP",
+        source_type="CITIZEN_REPORT",
+        source_base_trust=0.60,
+        origin_family=SourceFamily.CITIZEN,
+        cluster_member_count=18,
+    )
+    signals_18 = credibility_scorer.score_incident(inputs_18)
+    assessment = credibility_explanation_builder.build_assessment(
+        incident_id=test_id,
+        inputs=inputs_18,
+        signals=signals_18,
+    )
+
+    crowd_drivers = [d for d in assessment.positive_drivers if "Crowd" in d]
+    assert len(crowd_drivers) == 1
+    assert (
+        "Crowd volume signal from 18 duplicate incident reports (sub-signal: 1.00)."
+        in crowd_drivers[0]
+    )
+    assert "Crowd corroboration" not in crowd_drivers[0]
+    assert "score: 1.00" not in crowd_drivers[0]
 
 
 # =============================================================================

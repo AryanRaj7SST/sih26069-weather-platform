@@ -8,6 +8,7 @@ export const Navbar: React.FC = () => {
 
   const navLinks = [
     { name: 'Home', path: '/' },
+    { name: 'Incidents', path: '/incidents' },
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Live Map', path: '/live-map' },
     { name: 'Report Weather Event', path: '/report' },

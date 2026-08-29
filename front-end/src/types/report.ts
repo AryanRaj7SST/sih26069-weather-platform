@@ -1,4 +1,6 @@
-export type SeverityType = 'LOW' | 'MODERATE' | 'HIGH' | 'SEVERE';
+import { SeverityType } from './enums';
+import { PaginationMeta } from './api';
+import { VerificationEventDetail } from './verification';
 
 export interface WeatherCategoryOption {
   code: string;
@@ -56,16 +58,6 @@ export interface MediaDetail {
   sha256_hash: string;
 }
 
-export interface VerificationEventDetail {
-  id: string;
-  previous_status: string;
-  new_status: string;
-  notes?: string | null;
-  action_metadata?: Record<string, unknown> | null;
-  created_at: string;
-  reviewer_name: string;
-}
-
 export interface ReportDetailData {
   id: string;
   tracking_id: string;
@@ -90,15 +82,6 @@ export interface ReportDetailResponse {
     timestamp: string;
     request_id?: string;
   };
-}
-
-export interface PaginationMeta {
-  page: number;
-  page_size: number;
-  total_records: number;
-  total_pages: number;
-  has_next: boolean;
-  has_prev: boolean;
 }
 
 export interface ReportListQueryParams {

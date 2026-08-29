@@ -364,6 +364,97 @@ async def test_get_incident_credibility_canonical_drivers_and_flags(
 
 
 @pytest.mark.asyncio
+async def test_incident_credibility_timestamp_hierarchy_and_fallbacks(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Verify credibility last_calculated_at follows assessed_at -> updated_at hierarchy."""
+    uid = uuid.uuid4().hex[:8]
+    source = Source(
+        source_code=f"SRC_TS_{uid}",
+        name="Timestamp Test Source",
+        source_type="CITIZEN_REPORT",
+        base_trust_score=0.60,
+        is_active=True,
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    # Case A: Valid assessed_at in ISO format
+    ts_assessed = "2026-08-30T01:15:30.123456Z"
+    report_a = WeatherReport(
+        tracking_id=f"RPT-TS-A-{uid}",
+        source_id=source.id,
+        title="Timestamp Case A",
+        reported_category="FLOOD",
+        latitude=19.0760,
+        longitude=72.8777,
+        occurred_at=datetime.now(timezone.utc),
+        geom="SRID=4326;POINT(72.8777 19.0760)",
+        credibility_score=0.85,
+        credibility_explanation={
+            "assessed_at": ts_assessed,
+            "engine_version": "v1",
+            "policy_version": "v1",
+        },
+    )
+    db_session.add(report_a)
+
+    # Case B: Missing assessed_at -> falls back to updated_at
+    report_b = WeatherReport(
+        tracking_id=f"RPT-TS-B-{uid}",
+        source_id=source.id,
+        title="Timestamp Case B",
+        reported_category="FLOOD",
+        latitude=19.0760,
+        longitude=72.8777,
+        occurred_at=datetime.now(timezone.utc),
+        geom="SRID=4326;POINT(72.8777 19.0760)",
+        credibility_score=0.75,
+        credibility_explanation={
+            "engine_version": "v1",
+            "policy_version": "v1",
+        },
+    )
+    db_session.add(report_b)
+
+    # Case C: Malformed assessed_at -> safely falls back to updated_at without error
+    report_c = WeatherReport(
+        tracking_id=f"RPT-TS-C-{uid}",
+        source_id=source.id,
+        title="Timestamp Case C",
+        reported_category="FLOOD",
+        latitude=19.0760,
+        longitude=72.8777,
+        occurred_at=datetime.now(timezone.utc),
+        geom="SRID=4326;POINT(72.8777 19.0760)",
+        credibility_score=0.70,
+        credibility_explanation={
+            "assessed_at": "not-a-valid-timestamp-string",
+            "engine_version": "v1",
+        },
+    )
+    db_session.add(report_c)
+
+    await db_session.commit()
+
+    # Query Case A
+    res_a = await api_client.get(f"/api/v1/incidents/{report_a.id}/credibility")
+    assert res_a.status_code == 200
+    assert "2026-08-30T01:15:30" in res_a.json()["data"]["last_calculated_at"]
+
+    # Query Case B (fallback to updated_at)
+    res_b = await api_client.get(f"/api/v1/incidents/{report_b.id}/credibility")
+    assert res_b.status_code == 200
+    assert res_b.json()["data"]["last_calculated_at"] is not None
+
+    # Query Case C (safe fallback on malformed string)
+    res_c = await api_client.get(f"/api/v1/incidents/{report_c.id}/credibility")
+    assert res_c.status_code == 200
+    assert res_c.json()["data"]["last_calculated_at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_get_incident_evidence_canonical_relationships(
     api_client: AsyncClient,
     db_session: AsyncSession,

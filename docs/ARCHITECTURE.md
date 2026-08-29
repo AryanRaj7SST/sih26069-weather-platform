@@ -146,33 +146,43 @@ flowchart LR
 - Corroboration check: If citizen reports heavy rain ($> 30\text{ mm/hr}$) and the nearest AWS records $> 20\text{ mm/hr}$ precipitation within $\pm 2\text{ hours}$, boost corroboration confidence.
 
 ### Step 5: Explainable Credibility Scoring Algorithm
-Credibility is calculated as a deterministic, explainable composite score:
+Credibility is calculated as a deterministic, mathematically bounded composite score ($C \in [0.0000, 0.9800]$):
 
-$$\text{Credibility Score } (C) = w_1 S_{\text{source}} + w_2 S_{\text{cluster}} + w_3 S_{\text{sensor}} + w_4 S_{\text{media}} - P_{\text{anomaly}}$$
+1. **Base Trust Prior Anchor ($B$)**:
+   $$B = w_{\text{prior}} S_{\text{prior}} + w_{\text{qual}} S_{\text{qual}}$$
+   Anchored on source family reliability ($S_{\text{prior}} \in [0.40, 1.00]$) and report quality ($S_{\text{qual}}$).
 
-Where:
-- $S_{\text{source}} \in [0.1, 1.0]$: Base trust score of source (IMD AWS = $1.0$, Verified NGO = $0.85$, Authenticated Citizen = $0.65$, Anonymous Citizen = $0.40$).
-- $S_{\text{cluster}} \in [0.0, 1.0]$: Crowd corroboration bonus ($0.15 \times \min(\text{cluster\_size}, 5)$).
-- $S_{\text{sensor}} \in [0.0, 1.0]$: Meteorological alignment with nearest weather station readings.
-- $S_{\text{media}} \in [0.0, 1.0]$: Presence of geo-tagged, non-duplicate photo/video evidence.
-- $P_{\text{anomaly}} \in [0.0, 0.5]$: Penalty for spam keywords or suspicious submission bursts.
-- Weights: $w_1 = 0.30, w_2 = 0.25, w_3 = 0.25, w_4 = 0.20$.
+2. **External Corroboration Support ($S_{\text{support}}$)**:
+   $$S_{\text{support}} = \min\left(1.0, 0.30 S_{\text{crowd}} + 0.50 S_{\text{evidence}} + 0.50 S_{\text{observation}}\right)$$
+   - $S_{\text{crowd}} \in [0.0, 1.0]$: Crowd volume signal with diminishing returns ($1.0 - \exp(-(k - 1) / 3.0)$ for $k$ cluster members).
+   - $S_{\text{evidence}} \in [0.0, 1.0]$: Grouped digital evidence score with logarithmic diminishing returns per provenance group ($1.0 + 0.20 \ln(1 + \text{count} - 1)$).
+   - $S_{\text{observation}} \in [0.0, 1.0]$: Physical sensor corroboration from nearby IMD Automatic Weather Stations and CWC river gauges.
 
-The response payload exposes the exact breakdown in a structured `credibility_explanation` JSONB document.
+3. **Multi-Source Diversity Multiplier ($D$)**:
+   $$D = 1.0 + 0.06 \times (n_{\text{independent\_families}} - 1)$$
+   Calculated across participating distinct source families (`CITIZEN`, `IMD_AWS`, `CWC_GAUGE`, `NEWS_GDELT`, `NDMA_SACHET`, `SOCIAL_MASTODON`).
+
+4. **Corroboration Lift ($\Delta$) & Bounded Ceiling**:
+   $$\Delta = (1.0 - B) \times \min\left(1.0, S_{\text{support}} \times D\right)$$
+   $$C = \min\left(B + \Delta - P_{\text{contradiction}}, 0.9800\right)$$
+
+The response payload exposes the exact driver breakdown and uncertainty flags in a structured `credibility_explanation` document.
 
 ### Step 6: Verification State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Ingestion Complete
-    PENDING --> UNDER_REVIEW: Admin Opens Triage
-    PENDING --> DUPLICATE: Deduplication Rule Match (>0.90 similarity)
-    UNDER_REVIEW --> VERIFIED: Admin Confirms Authenticity
-    UNDER_REVIEW --> REJECTED: Admin Marks False/Hoax
-    UNDER_REVIEW --> DUPLICATE: Admin Merges into Cluster
-    VERIFIED --> [*]
-    REJECTED --> [*]
-    DUPLICATE --> [*]
+    PENDING --> UNDER_REVIEW: Operator Opens Triage
+    PENDING --> VERIFIED: Operator Confirms Ground Truth
+    PENDING --> REJECTED: Operator Marks False/Hoax
+    PENDING --> DUPLICATE: Operator Merges into Cluster
+    UNDER_REVIEW --> VERIFIED: Operator Confirms Ground Truth
+    UNDER_REVIEW --> REJECTED: Operator Marks False/Hoax
+    UNDER_REVIEW --> DUPLICATE: Operator Merges into Cluster
+    VERIFIED --> [*]: Terminal State (Completed)
+    REJECTED --> [*]: Terminal State (Closed)
+    DUPLICATE --> [*]: Terminal State (Closed)
 ```
 
 ---

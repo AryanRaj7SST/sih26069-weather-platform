@@ -1,3 +1,5 @@
+// Backward-Compatible Facade for Citizen Intake and Legacy Components
+
 import {
   CitizenReportFormValues,
   ReportDetailResponse,
@@ -5,8 +7,8 @@ import {
   ReportListResponse,
   ReportSubmitResponse,
 } from '@/types';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+import { apiClient, API_BASE_URL } from './client';
+import { incidentApi } from './incidentApi';
 
 export async function submitCitizenReport(
   values: CitizenReportFormValues,
@@ -32,46 +34,21 @@ export async function submitCitizenReport(
     formData.append('occurred_at', values.occurred_at);
   }
 
-  // Append up to 3 media files
   for (const file of mediaFiles) {
     formData.append('media_files', file, file.name);
   }
 
-  const response = await fetch(`${API_BASE_URL}/reports`, {
+  return apiClient<ReportSubmitResponse>('/reports', {
     method: 'POST',
     body: formData,
   });
-
-  const data = await response.json();
-
-  if (!response.ok || !data.success) {
-    const errorMsg =
-      data.error?.message ||
-      (data.detail?.message ? data.detail.message : 'Failed to submit report. Please check your inputs.');
-    throw new Error(errorMsg);
-  }
-
-  return data as ReportSubmitResponse;
 }
 
 export async function fetchReportByTrackingId(
   idOrTracking: string
 ): Promise<ReportDetailResponse> {
-  const cleanId = idOrTracking.trim();
-  const response = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(cleanId)}`);
-
-  const data = await response.json();
-
-  if (!response.ok || !data.success) {
-    const errorMsg =
-      data.error?.message ||
-      (data.detail?.message
-        ? data.detail.message
-        : `Weather report with ID ${cleanId} does not exist.`);
-    throw new Error(errorMsg);
-  }
-
-  return data as ReportDetailResponse;
+  const cleanId = encodeURIComponent(idOrTracking.trim());
+  return apiClient<ReportDetailResponse>(`/reports/${cleanId}`);
 }
 
 export async function fetchReportList(
@@ -90,37 +67,22 @@ export async function fetchReportList(
   if (params.bbox) searchParams.append('bbox', params.bbox);
 
   const queryString = searchParams.toString();
-  const url = `${API_BASE_URL}/reports${queryString ? `?${queryString}` : ''}`;
-
-  const response = await fetch(url);
-  const data = await response.json();
-
-  if (!response.ok || !data.success) {
-    const errorMsg =
-      data.error?.message ||
-      (data.detail?.message
-        ? data.detail.message
-        : 'Failed to fetch weather reports.');
-    throw new Error(errorMsg);
-  }
-
-  return data as ReportListResponse;
+  const url = `/reports${queryString ? `?${queryString}` : ''}`;
+  return apiClient<ReportListResponse>(url);
 }
 
 export async function fetchAllDashboardReports(
   params: ReportListQueryParams = {}
 ): Promise<ReportListResponse> {
-  // Fetch page 1 first (standard 100-record batch)
   const firstPage = await fetchReportList({ ...params, page: 1, page_size: 100 });
-  const { total_pages, total_records } = firstPage.pagination;
+  const totalPages = firstPage.pagination?.total_pages || 1;
+  const totalRecords = firstPage.pagination?.total_records || firstPage.data.length;
 
-  // If only 1 page or all records already returned, return immediately
-  if (total_pages <= 1 || firstPage.data.length >= total_records) {
+  if (totalPages <= 1 || firstPage.data.length >= totalRecords) {
     return firstPage;
   }
 
-  // Fetch remaining pages in parallel (bounded by total_pages, max 10 pages for safety)
-  const maxPagesToFetch = Math.min(total_pages, 10);
+  const maxPagesToFetch = Math.min(totalPages, 10);
   const pagePromises: Promise<ReportListResponse>[] = [];
 
   for (let pageNum = 2; pageNum <= maxPagesToFetch; pageNum++) {
@@ -138,7 +100,12 @@ export async function fetchAllDashboardReports(
     ...firstPage,
     data: allData,
     pagination: {
-      ...firstPage.pagination,
+      ...(firstPage.pagination || {
+        page: 1,
+        total_pages: totalPages,
+        total_records: totalRecords,
+        has_prev: false,
+      }),
       page_size: allData.length,
       has_next: false,
     },
@@ -150,17 +117,8 @@ export async function verifyReport(
   notes?: string,
   broadcastAlert?: boolean
 ): Promise<ReportDetailResponse> {
-  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/verify`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ notes, broadcast_alert: broadcastAlert }),
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.error?.message || data.detail?.message || 'Failed to verify report.');
-  }
-  return data as ReportDetailResponse;
+  const res = await incidentApi.verifyIncident(id, { notes, broadcast_alert: broadcastAlert });
+  return res as unknown as ReportDetailResponse;
 }
 
 export async function rejectReport(
@@ -168,17 +126,8 @@ export async function rejectReport(
   rejectionReason?: string,
   notes?: string
 ): Promise<ReportDetailResponse> {
-  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/reject`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rejection_reason: rejectionReason, notes }),
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.error?.message || data.detail?.message || 'Failed to reject report.');
-  }
-  return data as ReportDetailResponse;
+  const res = await incidentApi.rejectIncident(id, { rejection_reason: rejectionReason, notes });
+  return res as unknown as ReportDetailResponse;
 }
 
 export async function markDuplicateReport(
@@ -186,33 +135,16 @@ export async function markDuplicateReport(
   primaryReportId?: string,
   notes?: string
 ): Promise<ReportDetailResponse> {
-  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/mark-duplicate`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ primary_report_id: primaryReportId, notes }),
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.error?.message || data.detail?.message || 'Failed to mark report as duplicate.');
-  }
-  return data as ReportDetailResponse;
+  const res = await incidentApi.markDuplicateIncident(id, { primary_report_id: primaryReportId, notes });
+  return res as unknown as ReportDetailResponse;
 }
 
 export async function placeReportUnderReview(
   id: string,
   notes?: string
 ): Promise<ReportDetailResponse> {
-  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/review`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ notes }),
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.error?.message || data.detail?.message || 'Failed to place report under review.');
-  }
-  return data as ReportDetailResponse;
+  const res = await incidentApi.reviewIncident(id, { notes });
+  return res as unknown as ReportDetailResponse;
 }
 
+export { API_BASE_URL };

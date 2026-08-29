@@ -74,8 +74,8 @@ class CredibilityExplanationBuilder:
 
         if signals.crowd_cluster_score > 0.20:
             positive_drivers.append(
-                f"Crowd corroboration from {inputs.cluster_member_count} duplicate incident "
-                f"reports (score: {signals.crowd_cluster_score:.2f})."
+                f"Crowd volume signal from {inputs.cluster_member_count} duplicate incident "
+                f"reports (sub-signal: {signals.crowd_cluster_score:.2f})."
             )
 
         if signals.digital_evidence_score > 0.20:

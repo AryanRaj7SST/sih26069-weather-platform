@@ -69,6 +69,11 @@ export const ReviewReportDrawer: React.FC<ReviewReportDrawerProps> = ({
 
   if (!report) return null;
 
+  const isVerified = report.verification_status === 'VERIFIED';
+  const isRejected = report.verification_status === 'REJECTED';
+  const isDuplicate = report.verification_status === 'DUPLICATE';
+  const isTerminal = isVerified || isRejected || isDuplicate;
+
   const hasMedia = report.media && report.media.length > 0;
   const mediaItem = hasMedia ? report.media[0] : null;
 
@@ -364,152 +369,196 @@ export const ReviewReportDrawer: React.FC<ReviewReportDrawerProps> = ({
           </div>
         )}
 
-        {/* Operator Notes Input Area */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="operator-notes"
-            className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center space-x-1"
-          >
-            <span>Operator Notes</span>
-          </label>
-          <textarea
-            id="operator-notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder="Add verification context, agency dispatch notes, or reason for decision..."
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
-          />
-        </div>
+        {/* Operator Notes Input Area (Active triage only) */}
+        {!isTerminal && (
+          <div className="space-y-1.5">
+            <label
+              htmlFor="operator-notes"
+              className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center space-x-1"
+            >
+              <span>Operator Notes</span>
+            </label>
+            <textarea
+              id="operator-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Add verification context, agency dispatch notes, or reason for decision..."
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
+            />
+          </div>
+        )}
       </div>
 
       {/* 3. Drawer Action Footer (Fixed & Sticky at Bottom) */}
       <div className="flex-shrink-0 border-t border-slate-200 bg-white p-4 shadow-xl space-y-2.5">
-        {/* Inline Reject Options Expansion */}
-        {showRejectForm && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 space-y-2 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-rose-900">
-                Select Rejection Reason:
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowRejectForm(false)}
-                className="text-[10px] font-bold text-slate-500 hover:text-slate-800"
-              >
-                Cancel
-              </button>
-            </div>
-            <select
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              className="w-full rounded-lg border border-rose-200 bg-white p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-            >
-              <option value="INACCURATE_LOCATION">Inaccurate / Fake Location</option>
-              <option value="OLD_ARCHIVED_MEDIA">Old or Archived Photo</option>
-              <option value="SPAM_HOAX">Spam or Hoax Submission</option>
-              <option value="METEOROLOGICALLY_IMPOSSIBLE">Meteorologically Inconsistent</option>
-              <option value="OTHER">Other Reason</option>
-            </select>
-            <button
-              type="button"
-              onClick={handleReject}
-              disabled={isSubmitting}
-              className="w-full rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-60 transition-colors cursor-pointer shadow-xs"
-            >
-              {isSubmitting ? 'Rejecting...' : 'Confirm Rejection'}
-            </button>
-          </div>
-        )}
+        {isTerminal ? (
+          <div className="space-y-2">
+            {isVerified && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 flex items-center space-x-3 text-emerald-900">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-emerald-900">Ground Truth Verified</div>
+                  <div className="text-[11px] text-emerald-700 font-medium">Verification completed</div>
+                </div>
+              </div>
+            )}
 
-        {/* Inline Duplicate Options Expansion */}
-        {showDuplicateForm && (
-          <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-3 space-y-2 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-purple-900">
-                Primary Report Tracking ID (Optional):
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowDuplicateForm(false)}
-                className="text-[10px] font-bold text-slate-500 hover:text-slate-800"
-              >
-                Cancel
-              </button>
-            </div>
-            <input
-              type="text"
-              value={duplicatePrimaryId}
-              onChange={(e) => setDuplicatePrimaryId(e.target.value)}
-              placeholder="e.g. RPT-20260829-K8L9"
-              className="w-full rounded-lg border border-purple-200 bg-white p-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-            />
-            <button
-              type="button"
-              onClick={handleDuplicate}
-              disabled={isSubmitting}
-              className="w-full rounded-xl bg-purple-600 py-2.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-60 transition-colors cursor-pointer shadow-xs"
-            >
-              {isSubmitting ? 'Marking Duplicate...' : 'Confirm Mark as Duplicate'}
-            </button>
-          </div>
-        )}
+            {isRejected && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3.5 flex items-center space-x-3 text-rose-900">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                  <XCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-rose-900">Incident Rejected</div>
+                  <div className="text-[11px] text-rose-700 font-medium">Verification closed</div>
+                </div>
+              </div>
+            )}
 
-        {/* Primary Action Buttons (Matching Stitch Reference) */}
-        {!showRejectForm && !showDuplicateForm && (
+            {isDuplicate && (
+              <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-3.5 flex items-center space-x-3 text-purple-900">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100 text-purple-700 shrink-0">
+                  <Copy className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-purple-900">Marked as Duplicate</div>
+                  <div className="text-[11px] text-purple-700 font-medium">Verification closed</div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
           <>
-            <div className="flex items-center space-x-2">
-              {/* Verify Report Button */}
-              <button
-                type="button"
-                onClick={handleVerify}
-                disabled={isSubmitting}
-                className="flex-1 flex items-center justify-center space-x-2 rounded-xl bg-blue-600 py-3 px-4 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 transition-all cursor-pointer"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                <span>{isSubmitting ? 'Verifying...' : 'Verify Report'}</span>
-              </button>
+            {/* Inline Reject Options Expansion */}
+            {showRejectForm && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-rose-900">
+                    Select Rejection Reason:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowRejectForm(false)}
+                    className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <select
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  className="w-full rounded-lg border border-rose-200 bg-white p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                >
+                  <option value="INACCURATE_LOCATION">Inaccurate / Fake Location</option>
+                  <option value="OLD_ARCHIVED_MEDIA">Old or Archived Photo</option>
+                  <option value="SPAM_HOAX">Spam or Hoax Submission</option>
+                  <option value="METEOROLOGICALLY_IMPOSSIBLE">Meteorologically Inconsistent</option>
+                  <option value="OTHER">Other Reason</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleReject}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-60 transition-colors cursor-pointer shadow-xs"
+                >
+                  {isSubmitting ? 'Rejecting...' : 'Confirm Rejection'}
+                </button>
+              </div>
+            )}
 
-              {/* Reject Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRejectForm(true);
-                  setShowDuplicateForm(false);
-                }}
-                disabled={isSubmitting}
-                className="flex items-center justify-center space-x-1.5 rounded-xl border border-rose-300 bg-white py-3 px-4 text-xs font-bold text-rose-700 shadow-2xs hover:bg-rose-50 disabled:opacity-60 transition-all cursor-pointer"
-              >
-                <XCircle className="h-4 w-4" />
-                <span>Reject</span>
-              </button>
-            </div>
+            {/* Inline Duplicate Options Expansion */}
+            {showDuplicateForm && (
+              <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-3 space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-purple-900">
+                    Primary Report Tracking ID (Optional):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowDuplicateForm(false)}
+                    className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={duplicatePrimaryId}
+                  onChange={(e) => setDuplicatePrimaryId(e.target.value)}
+                  placeholder="e.g. RPT-20260829-K8L9"
+                  className="w-full rounded-lg border border-purple-200 bg-white p-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={handleDuplicate}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl bg-purple-600 py-2.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-60 transition-colors cursor-pointer shadow-xs"
+                >
+                  {isSubmitting ? 'Marking Duplicate...' : 'Confirm Mark as Duplicate'}
+                </button>
+              </div>
+            )}
 
-            {/* Mark as Duplicate Full Width Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowDuplicateForm(true);
-                setShowRejectForm(false);
-              }}
-              disabled={isSubmitting}
-              className="w-full flex items-center justify-center space-x-1.5 rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 px-3 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-60 transition-colors cursor-pointer"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span>Mark as Duplicate</span>
-            </button>
+            {/* Primary Action Buttons (Matching Stitch Reference) */}
+            {!showRejectForm && !showDuplicateForm && (
+              <>
+                <div className="flex items-center space-x-2">
+                  {/* Verify Report Button */}
+                  <button
+                    type="button"
+                    onClick={handleVerify}
+                    disabled={isSubmitting}
+                    className="flex-1 flex items-center justify-center space-x-2 rounded-xl bg-blue-600 py-3 px-4 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 transition-all cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{isSubmitting ? 'Verifying...' : 'Verify Report'}</span>
+                  </button>
 
-            {/* Keep Under Review Option */}
-            <button
-              type="button"
-              onClick={handleUnderReview}
-              disabled={isSubmitting}
-              className="w-full flex items-center justify-center space-x-1 text-[11px] font-semibold text-slate-500 hover:text-amber-700 transition-colors cursor-pointer py-1"
-            >
-              <Info className="h-3 w-3 text-amber-500" />
-              <span>Keep Under Review</span>
-              <CornerDownRight className="h-3 w-3 text-slate-400" />
-            </button>
+                  {/* Reject Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRejectForm(true);
+                      setShowDuplicateForm(false);
+                    }}
+                    disabled={isSubmitting}
+                    className="flex items-center justify-center space-x-1.5 rounded-xl border border-rose-300 bg-white py-3 px-4 text-xs font-bold text-rose-700 shadow-2xs hover:bg-rose-50 disabled:opacity-60 transition-all cursor-pointer"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    <span>Reject</span>
+                  </button>
+                </div>
+
+                {/* Mark as Duplicate Full Width Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDuplicateForm(true);
+                    setShowRejectForm(false);
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center space-x-1.5 rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 px-3 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Mark as Duplicate</span>
+                </button>
+
+                {/* Keep Under Review Option */}
+                <button
+                  type="button"
+                  onClick={handleUnderReview}
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center space-x-1 text-[11px] font-semibold text-slate-500 hover:text-amber-700 transition-colors cursor-pointer py-1"
+                >
+                  <Info className="h-3 w-3 text-amber-500" />
+                  <span>Keep Under Review</span>
+                  <CornerDownRight className="h-3 w-3 text-slate-400" />
+                </button>
+              </>
+            )}
           </>
         )}
       </div>

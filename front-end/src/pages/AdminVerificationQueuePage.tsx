@@ -10,6 +10,7 @@ import { QueueMobileList } from '@/features/admin/QueueMobileList';
 import { ReviewReportDrawer } from '@/features/admin/ReviewReportDrawer';
 import { fetchReportList } from '@/services/reportApi';
 import { ReportDetailData, ReportListQueryParams } from '@/types';
+import { incidentKeys } from '@/lib/queryKeys';
 import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
 
 export const AdminVerificationQueuePage: React.FC = () => {
@@ -110,7 +111,11 @@ export const AdminVerificationQueuePage: React.FC = () => {
   };
 
   const handleActionComplete = () => {
-    // Invalidate queries so queue & reports update automatically
+    // Invalidate prefix queries so all queue filters, lists, and details refresh automatically
+    queryClient.invalidateQueries({ queryKey: incidentKeys.verificationQueues() });
+    queryClient.invalidateQueries({ queryKey: incidentKeys.lists() });
+    queryClient.invalidateQueries({ queryKey: incidentKeys.geoAll() });
+    queryClient.invalidateQueries({ queryKey: incidentKeys.details() });
     queryClient.invalidateQueries({ queryKey: ['admin-queue-reports'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard-reports'] });
     queryClient.invalidateQueries({ queryKey: ['reports'] });

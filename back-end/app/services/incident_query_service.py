@@ -450,6 +450,25 @@ class IncidentQueryService:
             label = "MODERATE_CREDIBILITY"
 
         now = datetime.now(timezone.utc)
+
+        # 1. Primary source: credibility_explanation["assessed_at"]
+        calc_time: Optional[datetime] = None
+        assessed_at_raw = exp_data.get("assessed_at")
+        if isinstance(assessed_at_raw, str):
+            try:
+                calc_time = datetime.fromisoformat(assessed_at_raw.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                calc_time = None
+        elif isinstance(assessed_at_raw, datetime):
+            calc_time = assessed_at_raw
+
+        # 2. Fallbacks: report.updated_at -> report.created_at -> now
+        if calc_time is None:
+            calc_time = report.updated_at or report.created_at or now
+
+        if calc_time.tzinfo is None:
+            calc_time = calc_time.replace(tzinfo=timezone.utc)
+
         return IncidentCredibilityData(
             incident_id=report.id,
             score=score,
@@ -462,7 +481,7 @@ class IncidentQueryService:
             positive_drivers=pos_drivers,
             negative_drivers=neg_drivers,
             uncertainty_flags=flags,
-            last_calculated_at=report.created_at or now,
+            last_calculated_at=calc_time,
         )
 
     async def get_incident_intelligence_status(
