@@ -434,6 +434,33 @@ async def test_list_reports_success_and_pagination():
 
 
 @pytest.mark.asyncio
+async def test_list_reports_multi_page_consistency():
+    """Test that multi-page pagination returns disjoint sets and consistent total counts."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res_p1 = await client.get("/api/v1/reports?page=1&page_size=5")
+        assert res_p1.status_code == 200
+        data_p1 = res_p1.json()
+
+        total_records = data_p1["pagination"]["total_records"]
+        total_pages = data_p1["pagination"]["total_pages"]
+        assert total_pages >= 1
+
+        if total_records > 5:
+            res_p2 = await client.get("/api/v1/reports?page=2&page_size=5")
+            assert res_p2.status_code == 200
+            data_p2 = res_p2.json()
+
+            # Total records must be identical across pages
+            assert data_p2["pagination"]["total_records"] == total_records
+            assert data_p2["pagination"]["page"] == 2
+
+            # IDs from Page 1 and Page 2 must be disjoint
+            p1_ids = {r["id"] for r in data_p1["data"]}
+            p2_ids = {r["id"] for r in data_p2["data"]}
+            assert p1_ids.isdisjoint(p2_ids)
+
+
+@pytest.mark.asyncio
 async def test_list_reports_filter_by_category():
     """Test filtering reports by category code."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
