@@ -60,6 +60,22 @@ class Settings(BaseSettings):
     GDELT_TIMESPAN: str = "24h"
     GDELT_MIN_REQUEST_INTERVAL_SECONDS: float = 5.0
     GDELT_REQUEST_TIMEOUT_SECONDS: float = 15.0
+    MASTODON_INSTANCE_URL: str = "https://mastodon.social"
+    MASTODON_HASHTAGS: List[str] = [
+        "mumbairains",
+        "delhirains",
+        "bengalururains",
+        "chennairains",
+        "assamfloods",
+        "monsoon",
+        "flood",
+        "cyclone",
+        "heatwave",
+    ]
+    MASTODON_MAX_RESULTS_PER_TAG: int = 20
+    MASTODON_REQUEST_TIMEOUT_SECONDS: float = 15.0
+    MASTODON_POLL_INTERVAL_SECONDS: float = 30.0
+    MASTODON_MIN_REQUEST_INTERVAL_SECONDS: float = 1.0
 
     # AI & Semantic Intelligence (Optional in Phase 1)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
