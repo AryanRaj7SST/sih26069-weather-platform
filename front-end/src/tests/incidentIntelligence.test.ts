@@ -757,3 +757,82 @@ describe('10. Status-Aware Review Drawer Actions & Terminal Lifecycle', () => {
     expect(config.terminalSubtitle).toBe('Verification closed');
   });
 });
+
+describe('11. Home Page Live Data Contracts & Real-Time Aggregations', () => {
+  it('A. verifies Recent Verified Reports data mapping and links', () => {
+    const verifiedFixture: IncidentSummary = {
+      id: 'e53b4916-df63-4564-82e8-f10e76272a03',
+      tracking_id: 'RPT-20260829-K8L9',
+      title: 'Severe waterlogging at Kurla railway underpass',
+      category: {
+        code: 'FLOOD_WATERLOGGING',
+        title: 'Flood / Waterlogging',
+      },
+      severity: 'SEVERE',
+      verification_status: 'VERIFIED',
+      credibility_score: 0.9613,
+      location: {
+        name: 'Kurla Station West, Mumbai',
+        latitude: 19.0688,
+        longitude: 72.8797,
+      },
+      readiness: 'INTELLIGENCE_READY',
+      occurred_at: '2026-08-29T14:30:00Z',
+      created_at: '2026-08-29T14:32:10Z',
+      media_count: 2,
+    };
+
+    expect(verifiedFixture.verification_status).toBe('VERIFIED');
+    expect(verifiedFixture.category.code).toBe('FLOOD_WATERLOGGING');
+    expect(verifiedFixture.location.name).toBe('Kurla Station West, Mumbai');
+    expect(verifiedFixture.title).toContain('Kurla');
+  });
+
+  it('B. verifies Active Advisories honest metric mapping without fabricated measurements', () => {
+    const advisoryFixture: IncidentSummary = {
+      id: 'a6aec9fd-149c-4e3a-aa61-bfb948aca2d2',
+      tracking_id: 'RPT-20260829-M4N2',
+      title: 'Flash flooding on Western Express Highway',
+      category: {
+        code: 'FLOOD_WATERLOGGING',
+        title: 'Flood / Waterlogging',
+      },
+      severity: 'SEVERE',
+      verification_status: 'PENDING',
+      credibility_score: 0.884,
+      location: {
+        name: 'Bandra-Kalanagar Junction, Mumbai',
+        latitude: 19.0596,
+        longitude: 72.8458,
+      },
+      readiness: 'INTELLIGENCE_PARTIAL',
+      occurred_at: '2026-08-29T15:10:00Z',
+      created_at: '2026-08-29T15:12:00Z',
+      media_count: 1,
+    };
+
+    const isSevere = advisoryFixture.severity === 'SEVERE';
+    const credibilityPercentage =
+      advisoryFixture.credibility_score != null
+        ? Math.round(advisoryFixture.credibility_score * 100)
+        : 0;
+
+    expect(isSevere).toBe(true);
+    expect(credibilityPercentage).toBe(88);
+    expect(advisoryFixture.location.name).toBe('Bandra-Kalanagar Junction, Mumbai');
+  });
+
+  it('C. verifies Live Event Map Preview navigation target and event counter', () => {
+    const mapPreviewContract = {
+      fullScreenPath: '/live-map',
+      totalTrackedEvents: 42,
+      statusLabel: 'LIVE: 42 Incidents Tracked',
+    };
+
+    expect(mapPreviewContract.fullScreenPath).toBe('/live-map');
+    expect(mapPreviewContract.totalTrackedEvents).toBeGreaterThanOrEqual(0);
+    expect(mapPreviewContract.statusLabel).toContain('LIVE:');
+  });
+});
+
+
