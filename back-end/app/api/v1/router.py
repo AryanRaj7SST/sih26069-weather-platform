@@ -1,11 +1,17 @@
 from fastapi import APIRouter
 
+from app.api.v1.geo import router as geo_router
 from app.api.v1.health import router as health_router
+from app.api.v1.incidents import router as incidents_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.verification import router as verification_router
 
 api_v1_router = APIRouter()
 
 # Register endpoint routers
 api_v1_router.include_router(health_router, tags=["Health"])
+api_v1_router.include_router(incidents_router, prefix="/incidents", tags=["Incidents"])
 api_v1_router.include_router(reports_router, prefix="/reports", tags=["Reports"])
 api_v1_router.include_router(reports_router, prefix="/admin/reports", tags=["Admin Reports"])
+api_v1_router.include_router(verification_router, prefix="/verification", tags=["Verification"])
+api_v1_router.include_router(geo_router, prefix="/geo", tags=["Geospatial"])

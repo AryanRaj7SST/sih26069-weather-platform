@@ -1,3 +1,46 @@
+from app.schemas.credibility import (
+    IncidentCredibilityData,
+    IncidentCredibilityResponse,
+)
+from app.schemas.duplicate import (
+    ClusterMemberSummary,
+    IncidentClusterDetailData,
+    IncidentClusterDetailResponse,
+)
+from app.schemas.evidence import (
+    IncidentEvidenceItemData,
+    IncidentEvidenceListResponse,
+)
+from app.schemas.geo import (
+    GeoJSONFeatureCollection,
+    GeoJSONIncidentFeature,
+    GeoJSONIncidentProperties,
+    SpatialClusterListResponse,
+    SpatialClusterSummary,
+)
+from app.schemas.incident import (
+    IncidentCorroborationCounts,
+    IncidentCredibilitySummary,
+    IncidentDetailOperator,
+    IncidentDetailPublic,
+    IncidentDetailResponse,
+    IncidentIntelligenceSummary,
+    IncidentListResponse,
+    IncidentLocationResponse,
+    IncidentOperatorDetailResponse,
+    IncidentSummaryResponse,
+    IncidentVerificationSummary,
+)
+from app.schemas.intelligence import (
+    IncidentIntelligenceData,
+    IncidentIntelligenceStatusResponse,
+    StageStatusSummary,
+)
+from app.schemas.observation import (
+    IncidentObservationItemData,
+    IncidentObservationListResponse,
+    ObservationMetricSummary,
+)
 from app.schemas.report import (
     CategoryDetail,
     CitizenReportCreate,
@@ -20,8 +63,34 @@ from app.schemas.report import (
 __all__ = [
     "CategoryDetail",
     "CitizenReportCreate",
+    "ClusterMemberSummary",
+    "GeoJSONFeatureCollection",
+    "GeoJSONIncidentFeature",
+    "GeoJSONIncidentProperties",
+    "IncidentClusterDetailData",
+    "IncidentClusterDetailResponse",
+    "IncidentCorroborationCounts",
+    "IncidentCredibilityData",
+    "IncidentCredibilityResponse",
+    "IncidentCredibilitySummary",
+    "IncidentDetailOperator",
+    "IncidentDetailPublic",
+    "IncidentDetailResponse",
+    "IncidentEvidenceItemData",
+    "IncidentEvidenceListResponse",
+    "IncidentIntelligenceData",
+    "IncidentIntelligenceStatusResponse",
+    "IncidentIntelligenceSummary",
+    "IncidentListResponse",
+    "IncidentLocationResponse",
+    "IncidentObservationItemData",
+    "IncidentObservationListResponse",
+    "IncidentOperatorDetailResponse",
+    "IncidentSummaryResponse",
+    "IncidentVerificationSummary",
     "LocationDetail",
     "MediaDetail",
+    "ObservationMetricSummary",
     "PaginationMeta",
     "ReportDetailData",
     "ReportDetailResponse",
@@ -33,5 +102,8 @@ __all__ = [
     "ReportSubmitResponse",
     "ReportVerifyRequest",
     "SeverityType",
+    "SpatialClusterListResponse",
+    "SpatialClusterSummary",
+    "StageStatusSummary",
     "VerificationEventDetail",
 ]

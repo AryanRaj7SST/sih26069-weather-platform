@@ -19,6 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.report import WeatherReport
+from app.schemas.credibility import IncidentCredibilityResponse
+from app.schemas.duplicate import IncidentClusterDetailResponse
+from app.schemas.evidence import IncidentEvidenceListResponse
+from app.schemas.intelligence import IncidentIntelligenceStatusResponse
+from app.schemas.observation import IncidentObservationListResponse
 from app.schemas.report import (
     CategoryDetail,
     CitizenReportCreate,
@@ -37,6 +42,7 @@ from app.schemas.report import (
     SeverityType,
     VerificationEventDetail,
 )
+from app.services.incident_query_service import incident_query_service
 from app.services.report_service import report_service
 from app.services.storage import storage_service
 
@@ -585,6 +591,199 @@ async def place_report_under_review(
     return ReportDetailResponse(
         success=True,
         data=_serialize_report(updated),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.get(
+    "/{id}/credibility",
+    response_model=IncidentCredibilityResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve Report Credibility Breakdown",
+)
+async def get_report_credibility(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentCredibilityResponse:
+    """Retrieve credibility evaluation breakdown for report."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed identifier"
+        )
+
+    data = await incident_query_service.get_incident_credibility(session=db, identifier=clean_id)
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return IncidentCredibilityResponse(
+        success=True,
+        data=data,
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.get(
+    "/{id}/intelligence",
+    response_model=IncidentIntelligenceStatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve Report Intelligence Readiness Status",
+)
+async def get_report_intelligence(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentIntelligenceStatusResponse:
+    """Retrieve intelligence orchestration readiness for report."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed identifier"
+        )
+
+    data = await incident_query_service.get_incident_intelligence_status(
+        session=db, identifier=clean_id
+    )
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return IncidentIntelligenceStatusResponse(
+        success=True,
+        data=data,
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.get(
+    "/{id}/evidence",
+    response_model=IncidentEvidenceListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve Report Linked Digital Evidence",
+)
+async def get_report_evidence(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentEvidenceListResponse:
+    """Retrieve paginated linked evidence for report."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed identifier"
+        )
+
+    (
+        items,
+        total_records,
+        total_pages,
+        has_next,
+        has_prev,
+    ) = await incident_query_service.get_incident_evidence(
+        session=db, identifier=clean_id, page=page, page_size=page_size
+    )
+    if items is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return IncidentEvidenceListResponse(
+        success=True,
+        data=items,
+        pagination=PaginationMeta(
+            page=page,
+            page_size=page_size,
+            total_records=total_records,
+            total_pages=total_pages,
+            has_next=has_next,
+            has_prev=has_prev,
+        ),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.get(
+    "/{id}/observations",
+    response_model=IncidentObservationListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve Report Corroborating Physical Observations",
+)
+async def get_report_observations(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentObservationListResponse:
+    """Retrieve paginated observations corroborating report."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed identifier"
+        )
+
+    (
+        items,
+        total_records,
+        total_pages,
+        has_next,
+        has_prev,
+    ) = await incident_query_service.get_incident_observations(
+        session=db, identifier=clean_id, page=page, page_size=page_size
+    )
+    if items is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return IncidentObservationListResponse(
+        success=True,
+        data=items,
+        pagination=PaginationMeta(
+            page=page,
+            page_size=page_size,
+            total_records=total_records,
+            total_pages=total_pages,
+            has_next=has_next,
+            has_prev=has_prev,
+        ),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.get(
+    "/{id}/cluster",
+    response_model=IncidentClusterDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve Report Duplicate Cluster Details",
+)
+async def get_report_cluster(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    db: AsyncSession = Depends(get_db),
+) -> IncidentClusterDetailResponse:
+    """Retrieve duplicate cluster topology for report."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed identifier"
+        )
+
+    data = await incident_query_service.get_incident_cluster(session=db, identifier=clean_id)
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return IncidentClusterDetailResponse(
+        success=True,
+        data=data,
         meta={
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "request_id": f"req_{uuid.uuid4().hex[:12]}",
