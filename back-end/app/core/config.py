@@ -41,8 +41,9 @@ class Settings(BaseSettings):
 
     # External APIs (Optional in Phase 1)
     DATA_GOV_API_KEY: str = ""
-    IMD_API_ENDPOINT: str = "https://mausam.imd.gov.in/api/v1"
+    IMD_API_ENDPOINT: str = "https://api.imd.gov.in/api/v1"
     IMD_API_KEY: str = ""
+    IMD_REQUEST_TIMEOUT_SECONDS: float = 15.0
 
     # AI & Semantic Intelligence (Optional in Phase 1)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"

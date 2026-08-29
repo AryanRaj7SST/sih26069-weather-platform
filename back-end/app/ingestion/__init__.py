@@ -5,6 +5,7 @@ from app.ingestion.exceptions import (
     IngestionError,
     NormalizationError,
 )
+from app.ingestion.imd_adapter import IMDNowcastAdapter
 from app.ingestion.normalizer import EventNormalizer
 from app.ingestion.registry import AdapterRegistry, adapter_registry
 from app.ingestion.schemas import (
@@ -12,9 +13,13 @@ from app.ingestion.schemas import (
     RawIngestionEvent,
 )
 
+# Register standard adapters
+adapter_registry.register_factory("IMD_NOWCAST", lambda: IMDNowcastAdapter())
+
 __all__ = [
     "BaseIngestionAdapter",
     "DemoSeedAdapter",
+    "IMDNowcastAdapter",
     "EventNormalizer",
     "RawIngestionEvent",
     "NormalizedIngestionEvent",

@@ -9,26 +9,39 @@ from app.ingestion.schemas import NormalizedIngestionEvent, RawIngestionEvent
 class EventNormalizer:
     """Normalizes, cleanses, and validates heterogeneous raw ingestion events."""
 
+    VALID_CATEGORIES = {
+        "HEAVY_RAINFALL",
+        "FLOOD_WATERLOGGING",
+        "THUNDERSTORM_LIGHTNING",
+        "CYCLONE_GALE",
+        "HEATWAVE",
+        "HAILSTORM",
+        "LANDSLIDE",
+        "OTHER",
+    }
+
     CATEGORY_MAP: Dict[str, str] = {
-        "rain": "HEAVY_RAINFALL",
+        "thunderstorm": "THUNDERSTORM_LIGHTNING",
+        "lightning": "THUNDERSTORM_LIGHTNING",
+        "thunder": "THUNDERSTORM_LIGHTNING",
+        "squall": "THUNDERSTORM_LIGHTNING",
+        "waterlogging": "FLOOD_WATERLOGGING",
+        "cloudburst": "HEAVY_RAINFALL",
         "heavy_rain": "HEAVY_RAINFALL",
         "rainfall": "HEAVY_RAINFALL",
-        "flood": "FLOOD_WATERLOGGING",
         "flooding": "FLOOD_WATERLOGGING",
-        "waterlogging": "FLOOD_WATERLOGGING",
-        "thunder": "THUNDERSTORM_LIGHTNING",
-        "lightning": "THUNDERSTORM_LIGHTNING",
-        "thunderstorm": "THUNDERSTORM_LIGHTNING",
-        "cyclone": "CYCLONE_GALE",
-        "gale": "CYCLONE_GALE",
-        "storm": "CYCLONE_GALE",
-        "wind": "CYCLONE_GALE",
-        "heat": "HEATWAVE",
-        "heatwave": "HEATWAVE",
-        "hail": "HAILSTORM",
+        "flood": "FLOOD_WATERLOGGING",
         "hailstorm": "HAILSTORM",
+        "hail": "HAILSTORM",
         "landslide": "LANDSLIDE",
         "mudslide": "LANDSLIDE",
+        "cyclone": "CYCLONE_GALE",
+        "gale": "CYCLONE_GALE",
+        "heatwave": "HEATWAVE",
+        "heat": "HEATWAVE",
+        "storm": "CYCLONE_GALE",
+        "wind": "CYCLONE_GALE",
+        "rain": "HEAVY_RAINFALL",
     }
 
     SEVERITY_MAP: Dict[str, str] = {
@@ -149,6 +162,10 @@ class EventNormalizer:
     def normalize_category(cls, raw_cat: Optional[str], title: str = "") -> str:
         """Standardize category code."""
         if raw_cat:
+            upper_clean = str(raw_cat).upper().strip()
+            if upper_clean in cls.VALID_CATEGORIES:
+                return upper_clean
+
             clean = re.sub(r"[^a-z0-9_]", "_", str(raw_cat).lower().strip())
             for key, mapped in cls.CATEGORY_MAP.items():
                 if key in clean:

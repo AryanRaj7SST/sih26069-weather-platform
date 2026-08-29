@@ -362,7 +362,7 @@ class ReportService:
         source_code: str,
         name: Optional[str] = None,
         source_type: str = "EXTERNAL_FEED",
-        base_trust_score: float = 0.5,
+        base_trust_score: Optional[float] = None,
     ) -> Source:
         """Ensure a source catalog record exists by source_code."""
         clean_code = source_code.strip().upper()
@@ -370,16 +370,40 @@ class ReportService:
         result = await session.execute(stmt)
         source = result.scalar_one_or_none()
 
-        if source is None:
-            source = Source(
-                source_code=clean_code,
-                name=name or f"Data Source {clean_code}",
-                source_type=source_type,
-                base_trust_score=base_trust_score,
-                is_active=True,
-            )
-            session.add(source)
-            await session.flush()
+        if source is not None:
+            if base_trust_score is not None:
+                source.base_trust_score = base_trust_score
+            else:
+                from app.ingestion.registry import adapter_registry
+
+                registered = adapter_registry.get(clean_code)
+                if registered:
+                    source.base_trust_score = registered.base_trust_score
+            return source
+
+        resolved_trust = base_trust_score
+        resolved_name = name
+        resolved_type = source_type
+
+        from app.ingestion.registry import adapter_registry
+
+        registered = adapter_registry.get(clean_code)
+        if registered:
+            if resolved_trust is None:
+                resolved_trust = registered.base_trust_score
+            if not resolved_name:
+                resolved_name = registered.source_name
+            resolved_type = registered.source_type
+
+        source = Source(
+            source_code=clean_code,
+            name=resolved_name or f"Data Source {clean_code}",
+            source_type=resolved_type,
+            base_trust_score=resolved_trust if resolved_trust is not None else 0.5,
+            is_active=True,
+        )
+        session.add(source)
+        await session.flush()
 
         return source
 

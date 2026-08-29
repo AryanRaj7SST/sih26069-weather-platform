@@ -40,11 +40,11 @@
 ## 2. Catalog of Future Manual Actions
 
 ### 2.1 Government Open Data & IMD Portal Access
-* **What**: Register an application account on [data.gov.in (Open Government Data Portal)](https://data.gov.in) and request access to IMD weather telemetry datasets.
+* **What**: Register an appropriate developer/organization account on [IMD API Portal](https://api.imd.gov.in) and [data.gov.in](https://data.gov.in) and request access to IMD weather telemetry / nowcast datasets.
 * **Why**: To enable live polling of official Automatic Weather Stations (AWS) and Doppler weather radar precipitation feeds.
-* **Where**: Government Data Portal web interface.
-* **Credential Produced**: `DATA_GOV_API_KEY` (string token).
-* **Where it belongs**: `back-end/.env` $\rightarrow$ `DATA_GOV_API_KEY`.
+* **Where**: IMD API Portal / Government Data Portal web interface.
+* **Credential Produced**: `IMD_API_KEY` / `DATA_GOV_API_KEY` (string tokens).
+* **Where it belongs**: `back-end/.env` $\rightarrow$ `IMD_API_KEY`, `DATA_GOV_API_KEY`.
 * **Security Rule**: **NEVER commit this key to Git.** Always reference via environment variables.
 
 ---
@@ -120,7 +120,7 @@ S3_USE_SSL=false
 
 # External Meteorological & Government APIs
 DATA_GOV_API_KEY=
-IMD_API_ENDPOINT=https://mausam.imd.gov.in/api/v1
+IMD_API_ENDPOINT=https://api.imd.gov.in/api/v1
 IMD_API_KEY=
 
 # AI & Semantic Intelligence
