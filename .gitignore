@@ -41,5 +41,6 @@ minio_data/
 .DS_Store
 .idea/
 .vscode/
+pyrefly.toml
 *.swp
 *.swo

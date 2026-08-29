@@ -274,3 +274,124 @@ class EvidenceLinkResult(BaseModel):
         default=False, description="True if link was established and persisted."
     )
     assessment: EvidenceLinkAssessment = Field(..., description="Underlying assessment details.")
+
+
+class ObservationRelationship(str, Enum):
+    """Corroboration relationship between a physical observation and an incident."""
+
+    CORROBORATING = "CORROBORATING"
+    CONSISTENT = "CONSISTENT"
+    WEAK = "WEAK"
+    CONTRADICTORY = "CONTRADICTORY"
+    IRRELEVANT = "IRRELEVANT"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+
+
+class TrendDirection(str, Enum):
+    """Direction of metric trend from sequential observations."""
+
+    RISING = "RISING"
+    STEADY = "STEADY"
+    FALLING = "FALLING"
+    SINGLE_POINT = "SINGLE_POINT"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+
+
+class ObservationDataQuality(str, Enum):
+    """Data quality classification for an individual observation."""
+
+    VALID = "VALID"
+    STALE = "STALE"
+    MISSING_METRIC = "MISSING_METRIC"
+    MALFORMED = "MALFORMED"
+    INSUFFICIENT_HISTORY = "INSUFFICIENT_HISTORY"
+
+
+class TrendAnalysisResult(BaseModel):
+    """Result of same-station-same-metric trend computation."""
+
+    direction: TrendDirection = Field(..., description="Trend direction.")
+    delta_value: Optional[float] = Field(
+        default=None, description="Total metric change over window."
+    )
+    rate_per_hour: Optional[float] = Field(default=None, description="Metric change rate per hour.")
+    points_count: int = Field(default=0, description="Number of observations in sequence.")
+    span_minutes: Optional[float] = Field(
+        default=None, description="Temporal span of observation sequence."
+    )
+    has_data_gaps: bool = Field(
+        default=False,
+        description="True if time gaps exceed 2× expected interval.",
+    )
+    metric_key: str = Field(..., description="Metric column name analysed.")
+    station_code: str = Field(..., description="Station code for the trend.")
+
+
+class CorroborationSignalBreakdown(BaseModel):
+    """7-dimensional signal decomposition for observation corroboration."""
+
+    spatial_distance_meters: Optional[float] = Field(
+        default=None, description="Physical distance between observation and incident."
+    )
+    spatial_score: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Distance decay score."
+    )
+    temporal_delta_seconds: Optional[int] = Field(
+        default=None, description="Time delta in seconds."
+    )
+    temporal_score: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Asymmetric temporal decay score."
+    )
+    metric_relevance_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Hazard-metric compatibility."
+    )
+    station_context_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="River/basin/district context match."
+    )
+    trend_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Trend direction and magnitude score."
+    )
+    data_quality_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Observation data quality score."
+    )
+    source_trust_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Source institutional trust."
+    )
+
+
+class CorroborationAssessment(BaseModel):
+    """Structured assessment of observation-incident corroboration."""
+
+    incident_id: uuid.UUID = Field(..., description="Target WeatherReport ID.")
+    observation_id: uuid.UUID = Field(..., description="Source WeatherObservation ID.")
+    relationship_type: ObservationRelationship = Field(
+        ..., description="Corroboration classification."
+    )
+    overall_score: float = Field(..., ge=0.0, le=1.0, description="Composite corroboration score.")
+    signals: CorroborationSignalBreakdown = Field(
+        ..., description="7-dimensional signal decomposition."
+    )
+    trend: Optional[TrendAnalysisResult] = Field(default=None, description="Trend analysis result.")
+    data_quality: ObservationDataQuality = Field(
+        default=ObservationDataQuality.VALID, description="Observation data quality."
+    )
+    explanation: str = Field(..., description="Human-readable explanation.")
+    engine_version: str = Field(default="v1", description="Engine version identifier.")
+    policy_version: str = Field(default="water_level_v1", description="Metric policy version.")
+    metric_type: str = Field(default="water_level_m", description="Primary metric evaluated.")
+    assessed_at: datetime = Field(..., description="UTC assessment timestamp.")
+    is_human_override: bool = Field(
+        default=False, description="True if a human operator set this assessment."
+    )
+
+
+class CorroborationResult(BaseModel):
+    """Result of corroboration evaluation including persistence details."""
+
+    corroboration_id: Optional[uuid.UUID] = Field(default=None, description="Persisted row ID.")
+    incident_id: uuid.UUID = Field(..., description="Target incident ID.")
+    observation_id: uuid.UUID = Field(..., description="Observation ID.")
+    relationship_type: ObservationRelationship = Field(..., description="Relationship decision.")
+    corroboration_score: float = Field(..., ge=0.0, le=1.0, description="Composite score.")
+    is_persisted: bool = Field(default=False, description="True if row was created/updated.")
+    assessment: CorroborationAssessment = Field(..., description="Full assessment details.")

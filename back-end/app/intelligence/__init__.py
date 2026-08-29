@@ -1,4 +1,5 @@
-"""AI, classification, deduplication, evidence linking, and intelligence package."""
+"""AI, classification, deduplication, evidence linking, observation corroboration,
+and intelligence package."""
 
 from app.intelligence.candidate_generator import CandidateGenerator, candidate_generator
 from app.intelligence.category_rules import (
@@ -29,10 +30,34 @@ from app.intelligence.evidence_linking_engine import (
 )
 from app.intelligence.evidence_scorer import EvidenceScorer, evidence_scorer
 from app.intelligence.extractor import EntityExtractor, entity_extractor
+from app.intelligence.observation_candidate_generator import (
+    ObservationCandidateGenerator,
+    observation_candidate_generator,
+)
+from app.intelligence.observation_corroboration_engine import (
+    ObservationCorroborationEngine,
+    observation_corroboration_engine,
+)
+from app.intelligence.observation_evaluation_dataset import (
+    OBSERVATION_BENCHMARK_CASES,
+    run_observation_benchmark,
+)
+from app.intelligence.observation_scorer import (
+    ObservationScorer,
+    WaterLevelPolicy,
+    observation_scorer,
+)
+from app.intelligence.observation_trend_analyzer import (
+    ObservationTrendAnalyzer,
+    observation_trend_analyzer,
+)
 from app.intelligence.resolver import LocationResolver, location_resolver
 from app.intelligence.schemas import (
     CandidateQueryResult,
     ClusterAssignmentResult,
+    CorroborationAssessment,
+    CorroborationResult,
+    CorroborationSignalBreakdown,
     DuplicateAssessment,
     DuplicateDecision,
     DuplicateSignalBreakdown,
@@ -43,8 +68,12 @@ from app.intelligence.schemas import (
     ExtractedEntity,
     LocationCandidate,
     LocationResolutionResult,
+    ObservationDataQuality,
+    ObservationRelationship,
     ResolutionMethod,
     ResolutionStatus,
+    TrendAnalysisResult,
+    TrendDirection,
 )
 from app.intelligence.semantic_similarity import (
     SemanticVectorizer,
@@ -66,6 +95,13 @@ __all__ = [
     "EvidenceLinkSignalBreakdown",
     "EvidenceLinkAssessment",
     "EvidenceLinkResult",
+    "ObservationRelationship",
+    "ObservationDataQuality",
+    "TrendDirection",
+    "TrendAnalysisResult",
+    "CorroborationSignalBreakdown",
+    "CorroborationAssessment",
+    "CorroborationResult",
     "EntityExtractor",
     "entity_extractor",
     "LocationResolver",
@@ -91,4 +127,15 @@ __all__ = [
     "evidence_linking_engine",
     "EVIDENCE_BENCHMARK_PAIRS",
     "run_evidence_benchmark_evaluation",
+    "ObservationScorer",
+    "WaterLevelPolicy",
+    "observation_scorer",
+    "ObservationTrendAnalyzer",
+    "observation_trend_analyzer",
+    "ObservationCandidateGenerator",
+    "observation_candidate_generator",
+    "ObservationCorroborationEngine",
+    "observation_corroboration_engine",
+    "OBSERVATION_BENCHMARK_CASES",
+    "run_observation_benchmark",
 ]

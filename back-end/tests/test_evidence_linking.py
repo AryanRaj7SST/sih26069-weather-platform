@@ -399,7 +399,9 @@ async def test_evidence_linking_lifecycle_and_idempotency(db_session: AsyncSessi
     link_a = next(lnk for lnk in persisted_links2 if lnk.report_id == inc_a.id)
     link_a.link_role = "MANUAL_VERIFIED_SUPPORT"
     link_a.confidence_score = 0.99
-    link_a.match_explanation["is_human_override"] = True
+    match_dict = link_a.match_explanation or {}
+    match_dict["is_human_override"] = True
+    link_a.match_explanation = match_dict
     await db_session.flush()
 
     # Automated re-evaluation MUST NOT overwrite operator's decision
@@ -411,6 +413,7 @@ async def test_evidence_linking_lifecycle_and_idempotency(db_session: AsyncSessi
     re_link_a = next(lnk for lnk in persisted_links3 if lnk.report_id == inc_a.id)
     assert re_link_a.link_role == "MANUAL_VERIFIED_SUPPORT"
     assert re_link_a.confidence_score == 0.99
+    assert re_link_a.match_explanation is not None
     assert "last_automated_assessment" in re_link_a.match_explanation
 
     # 8. WeatherReport verification status safety

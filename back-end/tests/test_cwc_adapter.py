@@ -114,6 +114,7 @@ async def test_cwc_fetch_raw_events_success():
 
     assert len(raw_events) == 2
     assert raw_events[0].source_code == "CWC_NWDP"
+    assert raw_events[0].external_id is not None
     assert "CWC-KRISHNA-YADGIR" in raw_events[0].external_id
     assert raw_events[0].payload["Station"] == "Yadgir"
 
@@ -304,6 +305,7 @@ async def test_observation_persistence_and_idempotency(db_session: AsyncSession)
     obs2 = await obs_svc.ingest_normalized_observation(db_session, event_updated)
     assert obs2.id == obs1.id
     assert obs2.water_level_m == 341.10
+    assert obs2.raw_metrics is not None
     assert obs2.raw_metrics.get("updated") is True
 
     # Confirm count in database is exactly 1

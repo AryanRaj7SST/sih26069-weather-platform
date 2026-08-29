@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from sqlalchemy import (
     DateTime,
@@ -12,7 +12,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,13 +40,13 @@ class IncidentObservationCorroboration(Base):
         ForeignKey("weather_observations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    distance_meters: Mapped[float] = mapped_column(
+    distance_meters: Mapped[Optional[float]] = mapped_column(
         Float,
-        nullable=False,
+        nullable=True,
     )
-    time_delta_seconds: Mapped[int] = mapped_column(
+    time_delta_seconds: Mapped[Optional[int]] = mapped_column(
         Integer,
-        nullable=False,
+        nullable=True,
     )
     corroboration_score: Mapped[float] = mapped_column(
         Float,
@@ -56,7 +56,16 @@ class IncidentObservationCorroboration(Base):
         Text,
         nullable=True,
     )
+    corroboration_assessment: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,

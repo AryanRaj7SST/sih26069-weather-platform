@@ -95,6 +95,19 @@ class Settings(BaseSettings):
     EVIDENCE_RELATED_THRESHOLD: float = 0.45
     EVIDENCE_CONTEXTUAL_THRESHOLD: float = 0.35
     EVIDENCE_CANDIDATE_LIMIT: int = 50
+    # Observation Corroboration Engine (v1 — Water Level Policy Defaults)
+    CORROBORATION_ENGINE_VERSION: str = "v1"
+    CORROBORATION_WL_SPATIAL_RADIUS_METERS: float = 35000.0
+    CORROBORATION_WL_TIME_WINDOW_HOURS: float = 24.0
+    CORROBORATION_WL_TREND_LOOKBACK_HOURS: float = 6.0
+    CORROBORATION_WL_FRESHNESS_MAX_HOURS: float = 48.0
+    CORROBORATION_WL_TEMPORAL_PRIOR_FULL_HOURS: float = 4.0
+    CORROBORATION_WL_TEMPORAL_POST_DECAY_RATE: float = 0.7
+    CORROBORATION_WL_CORROBORATING_THRESHOLD: float = 0.70
+    CORROBORATION_WL_CONSISTENT_THRESHOLD: float = 0.45
+    CORROBORATION_WL_WEAK_THRESHOLD: float = 0.25
+    CORROBORATION_CANDIDATE_LIMIT: int = 50
+    CORROBORATION_CWC_SOURCE_TRUST: float = 0.92
     LLM_PROVIDER: str = "none"
     LLM_API_KEY: str = ""
 
@@ -106,8 +119,10 @@ class Settings(BaseSettings):
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v  # type: ignore
+        elif isinstance(v, list):
+            return [str(i) for i in v]
+        elif isinstance(v, str):
+            return [v]
         raise ValueError(v)
 
 

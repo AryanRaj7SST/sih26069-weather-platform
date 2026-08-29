@@ -108,6 +108,7 @@ async def test_weather_observation_insertion_and_fields(db_session: AsyncSession
     assert obs.external_id == ext_id
     assert obs.water_level_m == 352.45
     assert obs.rainfall_mm == 18.5
+    assert obs.raw_metrics is not None
     assert obs.raw_metrics["river"] == "Mithi"
     assert obs.source_id == cwc.id
 

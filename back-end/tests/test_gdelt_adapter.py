@@ -156,6 +156,7 @@ async def test_gdelt_fetch_raw_events_success():
 
     assert len(raw_events) == 2
     assert raw_events[0].source_code == "GDELT_DOC"
+    assert raw_events[0].external_id is not None
     assert raw_events[0].external_id.startswith("GDELT-")
 
 
@@ -253,6 +254,7 @@ async def test_evidence_persistence_and_idempotency(db_session: AsyncSession):
     ev2 = await ev_svc.ingest_normalized_evidence(db_session, event_updated)
     assert ev2.id == ev1.id
     assert "Updated" in ev2.title
+    assert ev2.raw_payload is not None
     assert ev2.raw_payload.get("updated") is True
 
     # Confirm count in database is exactly 1

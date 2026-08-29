@@ -201,6 +201,7 @@ async def test_mastodon_fetch_hashtag_timeline_success():
 
     assert len(raw_events) == 2
     assert raw_events[0].source_code == "MASTODON_PUBLIC"
+    assert raw_events[0].external_id is not None
     assert raw_events[0].external_id.startswith("MASTODON-")
 
 

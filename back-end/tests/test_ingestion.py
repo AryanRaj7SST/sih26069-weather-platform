@@ -228,6 +228,7 @@ async def test_persistence_and_idempotency_path():
         report2 = await report_service.ingest_normalized_event(session, updated_event)
         assert report2.id == first_report_id
         assert report2.tracking_id == first_tracking_id
+        assert report2.raw_payload is not None
         assert report2.raw_payload["original_metric"] == 55.0
 
         # Verify only 1 record exists with this external_id for this source in the database
