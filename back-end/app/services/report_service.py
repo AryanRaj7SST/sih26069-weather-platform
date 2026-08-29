@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.ingestion.schemas import NormalizedIngestionEvent
 from app.models.category import EventCategory
 from app.models.media import ReportMedia
 from app.models.report import WeatherReport
@@ -31,10 +32,10 @@ class ReportService:
     def generate_tracking_id() -> str:
         """Generate human-readable and safe tracking identifier.
 
-        Format: RPT-YYYYMMDD-XXXX (e.g., RPT-20260829-B4F8)
+        Format: RPT-YYYYMMDD-XXXXXXXX (e.g., RPT-20260829-B4F8E29A)
         """
         date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-        random_suffix = secrets.token_hex(2).upper()
+        random_suffix = secrets.token_hex(4).upper()
         return f"RPT-{date_str}-{random_suffix}"
 
     async def get_or_create_citizen_source(self, session: AsyncSession) -> Source:
@@ -354,6 +355,106 @@ class ReportService:
         res = await session.execute(stmt)
         refreshed = res.scalar_one_or_none()
         return refreshed or report
+
+    async def get_or_create_source(
+        self,
+        session: AsyncSession,
+        source_code: str,
+        name: Optional[str] = None,
+        source_type: str = "EXTERNAL_FEED",
+        base_trust_score: float = 0.5,
+    ) -> Source:
+        """Ensure a source catalog record exists by source_code."""
+        clean_code = source_code.strip().upper()
+        stmt = select(Source).where(Source.source_code == clean_code)
+        result = await session.execute(stmt)
+        source = result.scalar_one_or_none()
+
+        if source is None:
+            source = Source(
+                source_code=clean_code,
+                name=name or f"Data Source {clean_code}",
+                source_type=source_type,
+                base_trust_score=base_trust_score,
+                is_active=True,
+            )
+            session.add(source)
+            await session.flush()
+
+        return source
+
+    async def ingest_normalized_event(
+        self,
+        session: AsyncSession,
+        event: NormalizedIngestionEvent,
+    ) -> WeatherReport:
+        """Persist a normalized ingestion event into the database with idempotency guarantees."""
+        source = await self.get_or_create_source(
+            session=session,
+            source_code=event.source_code,
+            name=f"Ingestion Source {event.source_code}",
+        )
+
+        # Idempotency check: look for existing report from same source with same external_id
+        if event.external_id:
+            stmt = (
+                select(WeatherReport)
+                .where(
+                    WeatherReport.source_id == source.id,
+                    WeatherReport.external_id == event.external_id,
+                )
+                .options(
+                    selectinload(WeatherReport.category),
+                    selectinload(WeatherReport.media),
+                )
+            )
+            res = await session.execute(stmt)
+            existing_report = res.scalar_one_or_none()
+            if existing_report is not None:
+                # Update existing record payload if new metadata arrived
+                existing_report.raw_payload = event.raw_payload
+                existing_report.updated_at = datetime.now(timezone.utc)
+                await session.commit()
+                return existing_report
+
+        category_id, reported_cat = await self.resolve_category(
+            session, event.category_code or "OTHER"
+        )
+        tracking_id = self.generate_tracking_id()
+        point_geom = WKTElement(f"POINT({event.longitude} {event.latitude})", srid=4326)
+
+        report = WeatherReport(
+            tracking_id=tracking_id,
+            source_id=source.id,
+            external_id=event.external_id,
+            category_id=category_id,
+            reported_category=reported_cat,
+            severity=event.severity,
+            title=event.title,
+            description=event.description,
+            location_name=event.location_name,
+            geom=point_geom,
+            latitude=event.latitude,
+            longitude=event.longitude,
+            occurred_at=event.occurred_at,
+            processing_status="COMPLETED",
+            verification_status="PENDING",
+            credibility_score=source.base_trust_score,
+            raw_payload=event.raw_payload,
+        )
+        session.add(report)
+        await session.commit()
+
+        stmt = (
+            select(WeatherReport)
+            .where(WeatherReport.id == report.id)
+            .options(
+                selectinload(WeatherReport.category),
+                selectinload(WeatherReport.media),
+            )
+        )
+        res = await session.execute(stmt)
+        return res.scalar_one()
 
 
 report_service = ReportService()
