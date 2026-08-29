@@ -8,3 +8,4 @@ api_v1_router = APIRouter()
 # Register endpoint routers
 api_v1_router.include_router(health_router, tags=["Health"])
 api_v1_router.include_router(reports_router, prefix="/reports", tags=["Reports"])
+api_v1_router.include_router(reports_router, prefix="/admin/reports", tags=["Admin Reports"])

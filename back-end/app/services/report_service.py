@@ -2,7 +2,7 @@ import math
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import UploadFile
 from geoalchemy2.elements import WKTElement
@@ -15,6 +15,8 @@ from app.models.category import EventCategory
 from app.models.media import ReportMedia
 from app.models.report import WeatherReport
 from app.models.source import Source
+from app.models.user import User
+from app.models.verification import VerificationEvent
 from app.schemas.report import CitizenReportCreate
 from app.services.storage import StorageService, storage_service
 
@@ -184,6 +186,7 @@ class ReportService:
         stmt = select(WeatherReport).options(
             selectinload(WeatherReport.category),
             selectinload(WeatherReport.media),
+            selectinload(WeatherReport.verification_events),
         )
 
         if parsed_uuid is not None:
@@ -216,6 +219,7 @@ class ReportService:
         stmt = select(WeatherReport).options(
             selectinload(WeatherReport.category),
             selectinload(WeatherReport.media),
+            selectinload(WeatherReport.verification_events),
         )
         count_stmt = select(func.count(WeatherReport.id))
 
@@ -279,6 +283,77 @@ class ReportService:
         has_prev = page > 1
 
         return reports, total_records, total_pages, has_next, has_prev
+
+    async def get_or_create_default_reviewer(self, session: AsyncSession) -> User:
+        """Ensure standard Authorized Reviewer user exists for verification audit logging."""
+        stmt = select(User).where(User.email == "officer@deoc.gov.in")
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(
+                email="officer@deoc.gov.in",
+                full_name="Authorized Reviewer",
+                hashed_password="not_used_in_mvp",
+                role="DEOC_OFFICER",
+                is_active=True,
+            )
+            session.add(user)
+            await session.flush()
+
+        return user
+
+    async def update_verification_status(
+        self,
+        session: AsyncSession,
+        report_id_or_tracking: str,
+        new_status: str,
+        notes: Optional[str] = None,
+        action_metadata: Optional[Dict[str, Any]] = None,
+    ) -> WeatherReport:
+        """Update report verification status and record persistent VerificationEvent audit trail."""
+        report = await self.get_report_by_id_or_tracking(session, report_id_or_tracking)
+        if report is None:
+            raise ValueError(f"Report not found: {report_id_or_tracking}")
+
+        previous_status = report.verification_status
+        clean_status = new_status.upper()
+        report.verification_status = clean_status
+
+        if clean_status == "VERIFIED":
+            report.processing_status = "COMPLETED"
+        elif clean_status in ("REJECTED", "DUPLICATE"):
+            report.processing_status = "CLOSED"
+        elif clean_status == "UNDER_REVIEW":
+            report.processing_status = "IN_PROGRESS"
+
+        reviewer = await self.get_or_create_default_reviewer(session)
+
+        verification_event = VerificationEvent(
+            report_id=report.id,
+            user_id=reviewer.id,
+            previous_status=previous_status,
+            new_status=clean_status,
+            notes=notes,
+            action_metadata=action_metadata,
+        )
+        session.add(verification_event)
+        await session.commit()
+
+        # Re-query with populate_existing=True to eagerly load verification_events
+        stmt = (
+            select(WeatherReport)
+            .where(WeatherReport.id == report.id)
+            .options(
+                selectinload(WeatherReport.category),
+                selectinload(WeatherReport.media),
+                selectinload(WeatherReport.verification_events),
+            )
+            .execution_options(populate_existing=True)
+        )
+        res = await session.execute(stmt)
+        refreshed = res.scalar_one_or_none()
+        return refreshed or report
 
 
 report_service = ReportService()

@@ -6,10 +6,15 @@ from app.schemas.report import (
     PaginationMeta,
     ReportDetailData,
     ReportDetailResponse,
+    ReportDuplicateRequest,
     ReportListResponse,
+    ReportRejectRequest,
+    ReportReviewRequest,
     ReportSubmitData,
     ReportSubmitResponse,
+    ReportVerifyRequest,
     SeverityType,
+    VerificationEventDetail,
 )
 
 __all__ = [
@@ -20,8 +25,13 @@ __all__ = [
     "PaginationMeta",
     "ReportDetailData",
     "ReportDetailResponse",
+    "ReportDuplicateRequest",
     "ReportListResponse",
+    "ReportRejectRequest",
+    "ReportReviewRequest",
     "ReportSubmitData",
     "ReportSubmitResponse",
+    "ReportVerifyRequest",
     "SeverityType",
+    "VerificationEventDetail",
 ]

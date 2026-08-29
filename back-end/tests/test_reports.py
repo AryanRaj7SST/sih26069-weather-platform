@@ -577,3 +577,102 @@ async def test_list_reports_privacy_no_internal_leak():
             assert "text_embedding" not in first
             assert "credibility_explanation" not in first
             assert "audit_logs" not in first
+
+
+@pytest.mark.asyncio
+async def test_verify_report_action_success():
+    """Test verifying a report persists VERIFIED status and audit history."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Create a report
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "19.0760",
+                "longitude": "72.8777",
+                "category_code": "FLOOD_WATERLOGGING",
+                "severity": "HIGH",
+                "title": "Mumbai waterlogging test verification",
+            },
+        )
+        assert create_res.status_code == 201
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        # Verify the report
+        verify_res = await client.post(
+            f"/api/v1/reports/{tracking_id}/verify",
+            json={"notes": "Confirmed by Ward Officer", "broadcast_alert": True},
+        )
+        assert verify_res.status_code == 200
+        verified_data = verify_res.json()["data"]
+        assert verified_data["verification_status"] == "VERIFIED"
+        assert verified_data["processing_status"] == "COMPLETED"
+        assert len(verified_data["verification_history"]) >= 1
+        assert verified_data["verification_history"][0]["new_status"] == "VERIFIED"
+        assert verified_data["verification_history"][0]["notes"] == "Confirmed by Ward Officer"
+        assert verified_data["verification_history"][0]["reviewer_name"] == "Authorized Reviewer"
+
+
+@pytest.mark.asyncio
+async def test_reject_report_action_success():
+    """Test rejecting a report persists REJECTED status."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "28.6139",
+                "longitude": "77.2090",
+                "category_code": "HAILSTORM",
+                "severity": "MODERATE",
+                "title": "Delhi hailstorm false report",
+            },
+        )
+        assert create_res.status_code == 201
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        reject_res = await client.post(
+            f"/api/v1/admin/reports/{tracking_id}/reject",
+            json={"rejection_reason": "INACCURATE_LOCATION", "notes": "No hail observed"},
+        )
+        assert reject_res.status_code == 200
+        rejected_data = reject_res.json()["data"]
+        assert rejected_data["verification_status"] == "REJECTED"
+        assert rejected_data["processing_status"] == "CLOSED"
+        assert len(rejected_data["verification_history"]) >= 1
+        assert rejected_data["verification_history"][0]["new_status"] == "REJECTED"
+        assert rejected_data["verification_history"][0]["notes"] == "No hail observed"
+
+
+@pytest.mark.asyncio
+async def test_mark_duplicate_and_review_actions():
+    """Test marking report under review and duplicate."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "12.9716",
+                "longitude": "77.5946",
+                "category_code": "HEAVY_RAINFALL",
+                "severity": "MODERATE",
+                "title": "Bengaluru heavy rain duplicate check",
+            },
+        )
+        assert create_res.status_code == 201
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        # Place under review
+        review_res = await client.post(
+            f"/api/v1/reports/{tracking_id}/review",
+            json={"notes": "Checking with local AWS"},
+        )
+        assert review_res.status_code == 200
+        assert review_res.json()["data"]["verification_status"] == "UNDER_REVIEW"
+
+        # Mark duplicate
+        dup_res = await client.post(
+            f"/api/v1/reports/{tracking_id}/mark-duplicate",
+            json={"primary_report_id": "RPT-PRIMARY-01", "notes": "Merged into primary incident"},
+        )
+        assert dup_res.status_code == 200
+        assert dup_res.json()["data"]["verification_status"] == "DUPLICATE"
+        assert dup_res.json()["data"]["processing_status"] == "CLOSED"
+        assert len(dup_res.json()["data"]["verification_history"]) >= 2

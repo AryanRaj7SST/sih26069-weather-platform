@@ -56,6 +56,16 @@ export interface MediaDetail {
   sha256_hash: string;
 }
 
+export interface VerificationEventDetail {
+  id: string;
+  previous_status: string;
+  new_status: string;
+  notes?: string | null;
+  action_metadata?: Record<string, unknown> | null;
+  created_at: string;
+  reviewer_name: string;
+}
+
 export interface ReportDetailData {
   id: string;
   tracking_id: string;
@@ -69,6 +79,7 @@ export interface ReportDetailData {
   verification_status: string;
   credibility_score: number;
   media: MediaDetail[];
+  verification_history?: VerificationEventDetail[];
   created_at: string;
 }
 

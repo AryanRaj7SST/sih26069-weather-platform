@@ -127,6 +127,47 @@ class MediaDetail(BaseModel):
     sha256_hash: str
 
 
+class VerificationEventDetail(BaseModel):
+    """Audit detail of a verification action on a report."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    previous_status: str
+    new_status: str
+    notes: Optional[str] = None
+    action_metadata: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    reviewer_name: str = "Authorized Reviewer"
+
+
+class ReportVerifyRequest(BaseModel):
+    """Payload for verifying a report."""
+
+    notes: Optional[str] = None
+    broadcast_alert: Optional[bool] = False
+
+
+class ReportRejectRequest(BaseModel):
+    """Payload for rejecting a report."""
+
+    rejection_reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ReportDuplicateRequest(BaseModel):
+    """Payload for marking a report as duplicate."""
+
+    primary_report_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ReportReviewRequest(BaseModel):
+    """Payload for placing a report under review."""
+
+    notes: Optional[str] = None
+
+
 class ReportDetailData(BaseModel):
     """Public report tracking data payload."""
 
@@ -144,6 +185,7 @@ class ReportDetailData(BaseModel):
     verification_status: str
     credibility_score: float = 0.0
     media: List[MediaDetail] = []
+    verification_history: List[VerificationEventDetail] = []
     created_at: datetime
 
 

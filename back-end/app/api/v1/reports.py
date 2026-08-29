@@ -27,10 +27,15 @@ from app.schemas.report import (
     PaginationMeta,
     ReportDetailData,
     ReportDetailResponse,
+    ReportDuplicateRequest,
     ReportListResponse,
+    ReportRejectRequest,
+    ReportReviewRequest,
     ReportSubmitData,
     ReportSubmitResponse,
+    ReportVerifyRequest,
     SeverityType,
+    VerificationEventDetail,
 )
 from app.services.report_service import report_service
 from app.services.storage import storage_service
@@ -68,6 +73,26 @@ def _serialize_report(report: WeatherReport) -> ReportDetailData:
                 )
             )
 
+    history_items: List[VerificationEventDetail] = []
+    if getattr(report, "verification_events", None):
+        sorted_events = sorted(
+            report.verification_events,
+            key=lambda e: e.created_at,
+            reverse=True,
+        )
+        for ev in sorted_events:
+            history_items.append(
+                VerificationEventDetail(
+                    id=ev.id,
+                    previous_status=ev.previous_status,
+                    new_status=ev.new_status,
+                    notes=ev.notes,
+                    action_metadata=ev.action_metadata,
+                    created_at=ev.created_at,
+                    reviewer_name="Authorized Reviewer",
+                )
+            )
+
     return ReportDetailData(
         id=report.id,
         tracking_id=report.tracking_id,
@@ -88,6 +113,7 @@ def _serialize_report(report: WeatherReport) -> ReportDetailData:
         verification_status=report.verification_status,
         credibility_score=report.credibility_score,
         media=media_items,
+        verification_history=history_items,
         created_at=report.created_at,
     )
 
@@ -352,6 +378,213 @@ async def get_report_by_id_or_tracking(
     return ReportDetailResponse(
         success=True,
         data=_serialize_report(report),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.post(
+    "/{id}/verify",
+    response_model=ReportDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Authorize and Verify Weather Report",
+    description="Updates verification status to VERIFIED and records audit event.",
+)
+async def verify_report(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    payload: Optional[ReportVerifyRequest] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportDetailResponse:
+    """Authorize a weather report as verified ground truth."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": f"Malformed identifier: {id}",
+                "details": [],
+            },
+        )
+
+    try:
+        updated = await report_service.update_verification_status(
+            session=db,
+            report_id_or_tracking=clean_id,
+            new_status="VERIFIED",
+            notes=payload.notes if payload else None,
+            action_metadata={"broadcast_alert": payload.broadcast_alert} if payload else None,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "RESOURCE_NOT_FOUND",
+                "message": f"Report not found: {clean_id}",
+                "details": [],
+            },
+        )
+
+    return ReportDetailResponse(
+        success=True,
+        data=_serialize_report(updated),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.post(
+    "/{id}/reject",
+    response_model=ReportDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Reject Weather Report as False / Hoax / Inaccurate",
+    description="Updates verification status to REJECTED and records audit event.",
+)
+async def reject_report(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    payload: Optional[ReportRejectRequest] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportDetailResponse:
+    """Reject false or inaccurate report."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": f"Malformed identifier: {id}",
+                "details": [],
+            },
+        )
+
+    try:
+        updated = await report_service.update_verification_status(
+            session=db,
+            report_id_or_tracking=clean_id,
+            new_status="REJECTED",
+            notes=payload.notes if payload else None,
+            action_metadata={"rejection_reason": payload.rejection_reason} if payload else None,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "RESOURCE_NOT_FOUND",
+                "message": f"Report not found: {clean_id}",
+                "details": [],
+            },
+        )
+
+    return ReportDetailResponse(
+        success=True,
+        data=_serialize_report(updated),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.post(
+    "/{id}/mark-duplicate",
+    response_model=ReportDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Mark Weather Report as Duplicate",
+    description="Updates verification status to DUPLICATE and records audit event.",
+)
+async def mark_duplicate_report(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    payload: Optional[ReportDuplicateRequest] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportDetailResponse:
+    """Mark a redundant report as duplicate."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": f"Malformed identifier: {id}",
+                "details": [],
+            },
+        )
+
+    try:
+        updated = await report_service.update_verification_status(
+            session=db,
+            report_id_or_tracking=clean_id,
+            new_status="DUPLICATE",
+            notes=payload.notes if payload else None,
+            action_metadata={"primary_report_id": payload.primary_report_id} if payload else None,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "RESOURCE_NOT_FOUND",
+                "message": f"Report not found: {clean_id}",
+                "details": [],
+            },
+        )
+
+    return ReportDetailResponse(
+        success=True,
+        data=_serialize_report(updated),
+        meta={
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        },
+    )
+
+
+@router.post(
+    "/{id}/review",
+    response_model=ReportDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Mark Weather Report Under Review",
+    description="Updates verification status to UNDER_REVIEW and records audit event.",
+)
+async def place_report_under_review(
+    id: str = Path(..., min_length=3, max_length=64, description="Report UUID or Tracking ID"),
+    payload: Optional[ReportReviewRequest] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ReportDetailResponse:
+    """Mark report as actively under review by an operator."""
+    clean_id = id.strip()
+    if not ID_PATTERN.match(clean_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": f"Malformed identifier: {id}",
+                "details": [],
+            },
+        )
+
+    try:
+        updated = await report_service.update_verification_status(
+            session=db,
+            report_id_or_tracking=clean_id,
+            new_status="UNDER_REVIEW",
+            notes=payload.notes if payload else None,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "RESOURCE_NOT_FOUND",
+                "message": f"Report not found: {clean_id}",
+                "details": [],
+            },
+        )
+
+    return ReportDetailResponse(
+        success=True,
+        data=_serialize_report(updated),
         meta={
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "request_id": f"req_{uuid.uuid4().hex[:12]}",

@@ -144,3 +144,75 @@ export async function fetchAllDashboardReports(
     },
   };
 }
+
+export async function verifyReport(
+  id: string,
+  notes?: string,
+  broadcastAlert?: boolean
+): Promise<ReportDetailResponse> {
+  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/verify`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes, broadcast_alert: broadcastAlert }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error?.message || data.detail?.message || 'Failed to verify report.');
+  }
+  return data as ReportDetailResponse;
+}
+
+export async function rejectReport(
+  id: string,
+  rejectionReason?: string,
+  notes?: string
+): Promise<ReportDetailResponse> {
+  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/reject`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rejection_reason: rejectionReason, notes }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error?.message || data.detail?.message || 'Failed to reject report.');
+  }
+  return data as ReportDetailResponse;
+}
+
+export async function markDuplicateReport(
+  id: string,
+  primaryReportId?: string,
+  notes?: string
+): Promise<ReportDetailResponse> {
+  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/mark-duplicate`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ primary_report_id: primaryReportId, notes }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error?.message || data.detail?.message || 'Failed to mark report as duplicate.');
+  }
+  return data as ReportDetailResponse;
+}
+
+export async function placeReportUnderReview(
+  id: string,
+  notes?: string
+): Promise<ReportDetailResponse> {
+  const url = `${API_BASE_URL}/reports/${encodeURIComponent(id.trim())}/review`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error?.message || data.detail?.message || 'Failed to place report under review.');
+  }
+  return data as ReportDetailResponse;
+}
+
