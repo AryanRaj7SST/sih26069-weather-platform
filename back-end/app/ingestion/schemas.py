@@ -210,3 +210,86 @@ class NormalizedObservationEvent(BaseModel):
         if v.tzinfo is None:
             return v.replace(tzinfo=timezone.utc)
         return v.astimezone(timezone.utc)
+
+
+class NormalizedEvidenceEvent(BaseModel):
+    """Standardized secondary evidence representation (web news, official notices, social).
+
+    Semantic Note:
+    - `published_at`: Represents when the article was published/indexed by the source (e.g.
+      GDELT seendate), NOT the physical incident occurrence time.
+    - `raw_payload.sourcecountry`: Identifies publisher/outlet origin, NOT the physical
+      location of the weather event. Geolocation occurs in downstream NLP entity resolution.
+    """
+
+    event_id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        description="Unique pipeline event identifier.",
+    )
+    source_code: str = Field(
+        ...,
+        min_length=2,
+        max_length=50,
+        description="Originating source catalog code (e.g. 'GDELT_DOC', 'PIB_FEED').",
+    )
+    external_id: str = Field(
+        ...,
+        max_length=255,
+        description="Deterministic unique article/post identifier for deduplication.",
+    )
+    evidence_type: str = Field(
+        default="NEWS_ARTICLE",
+        max_length=50,
+        description="Classification of evidence ('NEWS_ARTICLE', 'GOV_RELEASE', 'SOCIAL_POST').",
+    )
+    title: str = Field(
+        ...,
+        min_length=3,
+        max_length=500,
+        description="Article headline or post title.",
+    )
+    url: Optional[str] = Field(
+        default=None,
+        max_length=1000,
+        description="Canonical source URL.",
+    )
+    publisher_domain: Optional[str] = Field(
+        default=None,
+        max_length=150,
+        description="Domain name of publisher (e.g. 'indiatoday.in').",
+    )
+    language: Optional[str] = Field(
+        default="English",
+        max_length=50,
+        description="Document language.",
+    )
+    published_at: Optional[datetime] = Field(
+        default=None,
+        description="Source publication/indexing timestamp (UTC). NOT incident occurrence time.",
+    )
+    text_snippet: Optional[str] = Field(
+        default=None,
+        description="API-provided snippet or description.",
+    )
+    sha256_hash: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="Cryptographic SHA-256 hash of canonical URL or body snippet.",
+    )
+    raw_payload: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Source metadata (e.g. sourcecountry). NOT verified event location.",
+    )
+    captured_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp when our system captured this evidence (UTC).",
+    )
+
+    @field_validator("published_at", "captured_at")
+    @classmethod
+    def ensure_utc_timezone(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)

@@ -3,7 +3,11 @@ import logging
 from typing import List, Optional, Tuple
 
 from app.core.redis import AsyncRedisClient, redis_client
-from app.ingestion.schemas import NormalizedIngestionEvent, NormalizedObservationEvent
+from app.ingestion.schemas import (
+    NormalizedEvidenceEvent,
+    NormalizedIngestionEvent,
+    NormalizedObservationEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +20,9 @@ class StreamService:
 
     DEFAULT_OBSERVATION_STREAM = "stream:weather:observations"
     DEFAULT_OBSERVATION_GROUP = "group:weather:observation_processors"
+
+    DEFAULT_EVIDENCE_STREAM = "stream:weather:evidence"
+    DEFAULT_EVIDENCE_GROUP = "group:weather:evidence_processors"
 
     def __init__(self, client: Optional[AsyncRedisClient] = None) -> None:
         self.client = client or redis_client
@@ -76,6 +83,35 @@ class StreamService:
             return msg_id
         except Exception as e:
             logger.error(f"Failed to publish observation to Redis Stream '{stream}': {e}")
+            raise
+
+    async def publish_evidence(
+        self,
+        evidence: NormalizedEvidenceEvent,
+        stream_name: Optional[str] = None,
+    ) -> str:
+        """Publish a normalized evidence item to the evidence Redis Stream."""
+        stream = stream_name or self.DEFAULT_EVIDENCE_STREAM
+        ev_dict = evidence.model_dump(mode="json")
+        payload_fields = {
+            "event_id": str(evidence.event_id),
+            "source_code": evidence.source_code,
+            "external_id": evidence.external_id,
+            "title": evidence.title,
+            "domain": evidence.publisher_domain or "",
+            "published_at": evidence.published_at.isoformat() if evidence.published_at else "",
+            "data": json.dumps(ev_dict),
+        }
+
+        try:
+            msg_id = await self.client.xadd(stream, payload_fields)
+            logger.info(
+                f"Published evidence '{evidence.event_id}' "
+                f"({evidence.publisher_domain}) to '{stream}': {msg_id}"
+            )
+            return msg_id
+        except Exception as e:
+            logger.error(f"Failed to publish evidence to Redis Stream '{stream}': {e}")
             raise
 
     async def ensure_consumer_group(
@@ -170,6 +206,46 @@ class StreamService:
 
         return observations
 
+    async def read_evidence(
+        self,
+        group_name: Optional[str] = None,
+        consumer_name: str = "worker-ev-1",
+        count: int = 10,
+        block_ms: Optional[int] = 2000,
+        stream_name: Optional[str] = None,
+        from_id: str = ">",
+    ) -> List[Tuple[str, NormalizedEvidenceEvent]]:
+        """Read a batch of evidence from the evidence stream for this consumer group."""
+        stream = stream_name or self.DEFAULT_EVIDENCE_STREAM
+        group = group_name or self.DEFAULT_EVIDENCE_GROUP
+
+        await self.ensure_consumer_group(stream, group)
+
+        raw_results = await self.client.xreadgroup(
+            group=group,
+            consumer=consumer_name,
+            streams={stream: from_id},
+            count=count,
+            block_ms=block_ms,
+        )
+
+        evidence_items: List[Tuple[str, NormalizedEvidenceEvent]] = []
+        for _, entries in raw_results:
+            for msg_id, fields in entries:
+                try:
+                    if "data" in fields:
+                        data_dict = json.loads(fields["data"])
+                        ev = NormalizedEvidenceEvent.model_validate(data_dict)
+                    else:
+                        ev = NormalizedEvidenceEvent.model_validate(fields)
+                    evidence_items.append((msg_id, ev))
+                except Exception as e:
+                    logger.error(f"Failed to deserialize evidence stream message '{msg_id}': {e}")
+                    # Acknowledge unrecoverable malformed message so queue does not block
+                    await self.client.xack(stream, group, msg_id)
+
+        return evidence_items
+
     async def get_pending_summary(
         self,
         stream_name: Optional[str] = None,
@@ -201,6 +277,18 @@ class StreamService:
         """Acknowledge a processed observation stream event."""
         stream = stream_name or self.DEFAULT_OBSERVATION_STREAM
         group = group_name or self.DEFAULT_OBSERVATION_GROUP
+        ack_count = await self.client.xack(stream, group, message_id)
+        return ack_count > 0
+
+    async def ack_evidence(
+        self,
+        message_id: str,
+        stream_name: Optional[str] = None,
+        group_name: Optional[str] = None,
+    ) -> bool:
+        """Acknowledge a processed evidence stream event."""
+        stream = stream_name or self.DEFAULT_EVIDENCE_STREAM
+        group = group_name or self.DEFAULT_EVIDENCE_GROUP
         ack_count = await self.client.xack(stream, group, message_id)
         return ack_count > 0
 

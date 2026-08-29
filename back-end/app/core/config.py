@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     CWC_NWDP_RESOURCE_ID: str = "d80798b9-4b11-4626-8b63-964202ba7216"
     CWC_REQUEST_TIMEOUT_SECONDS: float = 15.0
     CWC_FETCH_LIMIT: int = 50
+    GDELT_DOC_ENDPOINT: str = "http://api.gdeltproject.org/api/v2/doc/doc"
+    GDELT_QUERY: str = (
+        "sourcecountry:IN ("
+        'flood OR "heavy rain" OR "waterlogging" OR cyclone OR '
+        'landslide OR "heat wave" OR thunderstorm)'
+    )
+    GDELT_MAX_RECORDS: int = 50
+    GDELT_TIMESPAN: str = "24h"
+    GDELT_MIN_REQUEST_INTERVAL_SECONDS: float = 5.0
+    GDELT_REQUEST_TIMEOUT_SECONDS: float = 15.0
 
     # AI & Semantic Intelligence (Optional in Phase 1)
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
