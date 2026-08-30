@@ -62,6 +62,7 @@ from app.schemas.realtime import (
     ReportCreatedPayload,
     ReportIntelligenceReadyPayload,
     ReportVerificationChangedPayload,
+    SystemResyncRequiredPayload,
 )
 from app.schemas.report import (
     CategoryDetail,
@@ -144,6 +145,7 @@ __all__ = [
     "SpatialClusterListResponse",
     "SpatialClusterSummary",
     "StageStatusSummary",
+    "SystemResyncRequiredPayload",
     "VerificationBreakdown",
     "VerificationEventDetail",
 ]

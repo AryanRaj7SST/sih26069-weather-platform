@@ -22,6 +22,20 @@ class RealtimeEventType(str, enum.Enum):
     REPORT_INTELLIGENCE_READY = "report.intelligence_ready"
     CLUSTER_UPDATED = "cluster.updated"
     SYSTEM_HEARTBEAT = "system.heartbeat"
+    SYSTEM_RESYNC_REQUIRED = "system.resync_required"
+
+
+class SystemResyncRequiredPayload(BaseModel):
+    """Payload emitted when client's Last-Event-ID falls outside retained stream history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(default="RESYNC_REQUIRED")
+    message: str = Field(
+        default="Stream history pruned. Client must refresh authoritative state via REST API."
+    )
+    requested_last_event_id: str = Field(..., description="The Last-Event-ID requested by client.")
+    oldest_available_id: str = Field(..., description="The oldest available message ID in Redis.")
 
 
 class ReportCreatedPayload(BaseModel):
