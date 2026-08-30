@@ -36,11 +36,11 @@ Phase 0: Project Initialization & Architectural Source of Truth   [COMPLETED & V
   │
   ├─► Phase 13: Analytics Platform & Server Aggregation           [COMPLETED & VERIFIED]
   │
-  ├─► Phase 12: Real-Time Event Streaming (Server-Sent Events)    [NEXT PHASE]
+  ├─► Phase 12: Real-Time Event Streaming (Server-Sent Events)    [COMPLETED & VERIFIED]
   │
-  ├─► Phase 14: End-to-End Load Testing & Security Hardening      [FUTURE EXTENSION]
+  ├─► Phase 14: Full-Product Hardening & Demonstration Packaging  [NEXT PHASE]
   │
-  └─► Phase 15: Demo Scenario Packaging & Judge Walkthrough       [FUTURE EXTENSION]
+  └─► Phase 15: Production Security & Enterprise RBAC             [FUTURE EXTENSION]
 ```
 
 ---
@@ -110,6 +110,15 @@ Phase 0: Project Initialization & Architectural Source of Truth   [COMPLETED & V
   - **Regional Demographics API** (`GET /api/v1/analytics/regional`): Full-population two-tier regional aggregation (word-boundary city/state tokens + PostGIS spatial bounding envelope fallback).
   - **Analytics Interface** (`/analytics`): Fully server-aggregated analytics dashboard with zero client-side calculation loops or raw record dependency.
 
+### Phase 12: Real-Time Event Streaming (Server-Sent Events)
+- **Status**: **COMPLETED & VERIFIED**
+- **Deliverables**:
+  - **Transactional Outbox** (`realtime_outbox`): Atomically stages events inside domain mutation transactions in PostgreSQL with `SKIP LOCKED` batch claiming and exponential retry backoff.
+  - **Outbox Worker Runtime** (`python -m app.workers.run_outbox_worker`): Standalone publisher process with adaptive draining, idle sleep, graceful `SIGTERM`/`SIGINT` shutdown, and scheduled 72-hour historical pruning.
+  - **Streaming Transport** (`GET /api/v1/events/stream`): Persistent HTTP Server-Sent Events endpoint backed by Redis Streams (`stream:weather:realtime`, `MAXLEN ~ 10000`), comment heartbeats (15s), cursor replay via `Last-Event-ID`, and `system.resync_required` notifications.
+  - **Frontend Realtime Manager** (`realtimeService.ts`): Root-level singleton with auto-reconnect, bounded FIFO queue (1,000 items) for `event_id` deduplication, and targeted React Query cache invalidation (`incidentKeys`, `dashboardKeys`, `analyticsKeys`).
+  - **Live Browser Verification**: Verified live without manual refresh — test incident `"testinggg"` transitioned `PENDING` $\to$ `VERIFIED`, updating Pending Review from 2537 to 2536 and Verified Reports from 480 to 481.
+
 ---
 
 ## 2. Key Hardening Fixes & Semantic Corrections
@@ -129,14 +138,8 @@ During end-to-end runtime validation, the following architectural and presentati
 
 The following items are architected for subsequent production scale beyond the SIH MVP evaluation scope:
 
-### Phase 12: Real-Time Event Streaming (Server-Sent Events)
-- **Objective**: Push instantaneous incident notifications and triage updates to connected browsers via SSE and Redis Pub/Sub.
+### Phase 14: Full-Product Hardening, Demo Scenarios & Gaps Audit
+- **Objective**: Multi-hazard scenario simulations, end-to-end smoke test coverage, and hackathon presentation packaging (Mumbai Urban Deluge, Uttarakhand Flash Flood, Cyclone Landfall).
 
-### Phase 13: Advanced Hydrographs & Historical Analytics
-- **Objective**: Multi-year flood return period calculations, seasonal hydrograph visualizations, and detailed adapter latency dashboards.
-
-### Phase 14: Production Security & Enterprise Messaging
-- **Objective**: Full OAuth2 / JWT role-based access control (RBAC), multi-region Kafka stream migration, and signed cryptographic audit trails.
-
-### Phase 15: Demo Scenario Packaging & Judge Walkthrough
-- **Objective**: Automated multi-hazard regional seed scripts (Mumbai Urban Deluge, Uttarakhand Flash Flood, Cyclone Landfall) for live hackathon jury presentations.
+### Phase 15: Production Security & Enterprise RBAC
+- **Objective**: Full OAuth2 / JWT role-based access control (RBAC), production container supervisor definitions (systemd / Kubernetes), multi-region Kafka stream migration, and signed cryptographic audit trails.

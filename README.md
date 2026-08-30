@@ -74,7 +74,7 @@ The platform strictly enforces the following domain separations:
 | **Phase 11: Verification & Triage** | Priority triage queue, side-by-side evidence inspection, status-aware action drawer, immutable audit log. | **COMPLETED & VERIFIED** |
 | **Incident Intelligence Frontend** | Multi-filter Incident Explorer (`/incidents`), 5-dimension Deep-Dive (`/incidents/:id`), Operator Portal (`/login`). | **COMPLETED & VERIFIED** |
 | **Phase 13: Analytics Platform** | Server-aggregated trends (`/api/v1/analytics/trends`), summary metrics, and two-tier regional demographics (`/api/v1/analytics/regional`). | **COMPLETED & VERIFIED** |
-| **Phase 12: Real-Time Event Streaming** | Server-Sent Events (SSE) notification channel via Redis Pub/Sub for live triage alerts. | *Next Implementation Phase* |
+| **Phase 12: Real-Time Event Streaming** | Transactional outbox pattern, dedicated worker, Redis Streams buffer, FastAPI SSE (`GET /api/v1/events/stream`), and React Query live cache invalidation. | **COMPLETED & VERIFIED** |
 | **Phase 14–15: Production Auth & Scale** | Role-based JWT/OAuth2 boundary, multi-region Kafka streaming, edge IoT mesh. | *Future Hardening Scope* |
 
 ---
@@ -102,7 +102,7 @@ The platform strictly enforces the following domain separations:
 docker compose up -d
 ```
 
-### 2. Backend Setup
+### 2. Backend API Setup
 ```bash
 cd back-end
 python3 -m venv .venv
@@ -112,7 +112,14 @@ alembic upgrade head
 uvicorn app.main:app --port 8000 --reload
 ```
 
-### 3. Frontend Setup
+### 3. Realtime Outbox Worker (Separate Terminal)
+```bash
+cd back-end
+source .venv/bin/activate
+python -m app.workers.run_outbox_worker
+```
+
+### 4. Frontend Setup
 ```bash
 cd front-end
 npm install
@@ -126,6 +133,7 @@ The application will be available at:
 - **Verification Queue**: `http://localhost:5173/admin/queue`
 - **Incident Explorer**: `http://localhost:5173/incidents`
 - **Backend Swagger API Docs**: `http://localhost:8000/docs`
+- **Real-Time SSE Stream**: `http://localhost:8000/api/v1/events/stream`
 
 ---
 
@@ -134,10 +142,10 @@ The application will be available at:
 ### Backend Quality Suite
 ```bash
 cd back-end
-.venv/bin/pytest -q                       # Runs 266 unit and integration tests (100% passing)
-.venv/bin/mypy app tests                 # Full static typechecking (0 issues across 124 files)
+.venv/bin/pytest -q                       # Runs 322 unit and integration tests (100% passing)
+.venv/bin/mypy app tests                 # Full static typechecking (0 issues across 136 source files)
 .venv/bin/ruff check .                   # Linter check (0 errors)
-.venv/bin/ruff format --check .          # Code formatting verification (128 files formatted)
+.venv/bin/ruff format --check .          # Code formatting verification (141 files formatted)
 pyrefly check                            # Python 3.14 static diagnostics (0 errors)
 ```
 
@@ -146,8 +154,8 @@ pyrefly check                            # Python 3.14 static diagnostics (0 err
 cd front-end
 npm run typecheck                        # TypeScript strict compiler check (0 errors)
 npm run lint                             # ESLint verification (0 errors, 0 warnings)
-npx vitest run                           # Runs 106 unit and contract tests (100% passing across 6 suites)
-npm run build                            # Production bundle build verification
+npx vitest run                           # Runs 152 unit and contract tests (100% passing across 9 suites)
+npm run build                            # Production bundle build verification (built in ~1.8s)
 ```
 
 ---

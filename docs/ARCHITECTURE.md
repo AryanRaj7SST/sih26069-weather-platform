@@ -219,13 +219,114 @@ stateDiagram-v2
 
 ---
 
-## 5. Real-Time Event & Notification Flow
+## 5. Canonical Real-Time Outbox & SSE Streaming Architecture
 
-1. **Submission Event**: Citizen submits a report $\rightarrow$ FastAPI validates payload and generates an S3 presigned URL for media.
-2. **Stream Enqueue**: Event metadata is pushed onto Redis Stream `stream:weather:events`.
-3. **Worker Processing**: Background worker consumes from Redis Stream, executes classification, clustering, sensor corroboration, and credibility calculation, then commits to PostgreSQL.
-4. **Broadcast Channel**: On state transition or high-severity detection, worker publishes notification to Redis Pub/Sub `pubsub:weather:updates`.
-5. **Client Stream (SSE)**: FastAPI SSE endpoint streams JSON updates to connected Disaster Management Dashboards without requiring page polling.
+The platform implements an asynchronous, transactional outbox pattern paired with Redis Streams and Server-Sent Events (SSE) to broadcast live state mutations to connected operator dashboards with at-least-once reliability and client-side deduplication.
+
+### 5.1 Architecture & End-to-End Data Flow
+
+```mermaid
+flowchart TD
+    subgraph Domain_Layer["1. Domain State & Transaction Boundary"]
+        MUT["Domain Mutation\n(Citizen Report / Verification / Intelligence)"]
+        PG_TX["PostgreSQL Transaction (ACID)"]
+        BIZ_ROW[("Business Entity Table\n(weather_reports / duplicate_clusters)")]
+        AUD_ROW[("Audit Trail\n(verification_events)")]
+        OUT_ROW[("Transactional Outbox\n(realtime_outbox: PENDING)")]
+    end
+
+    subgraph Worker_Layer["2. Independent Outbox Worker Tier"]
+        WORKER["RealtimeOutboxWorker Process\n(python -m app.workers.run_outbox_worker)"]
+        CLAIM["SELECT ... FOR UPDATE SKIP LOCKED\n(Batch size: 50)"]
+        PUB_ACK["Mark PUBLISHED\n(or DEAD_LETTER after 5 retries)"]
+    end
+
+    subgraph Streaming_Transport["3. In-Memory Streaming & Transport Tier"]
+        R_STREAM[("Redis Stream\nstream:weather:realtime (MAXLEN ~10000)")]
+        SSE_EP["FastAPI SSE Endpoint\nGET /api/v1/events/stream"]
+    end
+
+    subgraph Frontend_Realtime["4. Presentation & Cache Invalidation Tier"]
+        R_SVC["RealtimeService Singleton\n(EventSource with auto-reconnect)"]
+        DEDUPE["Bounded FIFO Deduplication\n(Set + Queue: 1000 event_ids)"]
+        RQ_INV["React Query Cache Invalidation\n(incidentKeys, dashboardKeys, analyticsKeys)"]
+        REST_FETCH["Authoritative REST Refetch\n(GET /summary, /incidents, /queue)"]
+        UI_UPDATE["Live Dashboard & Queue UI Updated"]
+    end
+
+    MUT --> PG_TX
+    PG_TX --> BIZ_ROW
+    PG_TX --> AUD_ROW
+    PG_TX --> OUT_ROW
+
+    OUT_ROW -.->|Durable Row| CLAIM
+    WORKER --> CLAIM
+    CLAIM -->|Publish Payload| R_STREAM
+    R_STREAM -->|Acknowledge Message ID| PUB_ACK
+    PUB_ACK -->|Update status: PUBLISHED| OUT_ROW
+
+    R_STREAM -->|XREAD block_ms=2000| SSE_EP
+    SSE_EP -->|HTTP chunked text/event-stream| R_SVC
+    R_SVC --> DEDUPE
+    DEDUPE -->|Unique Event ID| RQ_INV
+    RQ_INV --> REST_FETCH
+    REST_FETCH --> UI_UPDATE
+```
+
+---
+
+### 5.2 Component Separation & Technical Rationale
+
+1. **Why PostgreSQL Transactional Outbox?**
+   - **Guaranteed Consistency**: The business state mutation (`weather_reports`), the audit log (`verification_events`), and the outbox record (`realtime_outbox`) commit atomically in a single PostgreSQL transaction.
+   - **Zero Ghost Events**: If the database transaction rolls back, the outbox record is rolled back automatically. No event is ever published for an uncommitted mutation.
+   - **Decoupled Transport**: Eliminates fragile distributed two-phase commit (2PC) between PostgreSQL and Redis.
+
+2. **Why Dedicated Outbox Worker Process?**
+   - **Separation of Web & Worker**: Web request handlers never block on external stream publishing. Worker runs in an independent process (`python -m app.workers.run_outbox_worker`).
+   - **Horizontal Multi-Worker Scaling**: Multiple worker replicas concurrently query `realtime_outbox` using `SELECT ... FOR UPDATE SKIP LOCKED`, preventing lock contention and duplicate claims.
+   - **Self-Healing Backlog Draining**: Drains high-volume bursts with adaptive immediate iteration; sleeps when idle without CPU busy-spinning.
+
+3. **Why Redis Streams (`stream:weather:realtime`)?**
+   - **Ordered In-Memory Buffer**: Messages are strictly sequential with millisecond timestamp IDs (e.g., `1788095860922-0`).
+   - **Native Historical Replay**: Supports `XRANGE` and `XREAD` for client reconnection replay without hitting PostgreSQL.
+   - **Bounded Memory Profile**: Capped with approximate trimming (`MAXLEN ~ 10000`) to guarantee a stable in-memory footprint.
+
+4. **Why Server-Sent Events (SSE)?**
+   - **Lightweight Unidirectional Push**: Perfect match for server-to-client telemetry feeds over standard HTTP/1.1 and HTTP/2 without WebSocket connection negotiation overhead.
+   - **Native Browser Semantics**: Standard browser `EventSource` handles reconnection automatically and transmits the `Last-Event-ID` header.
+   - **Proxy Resilience**: Standard HTTP headers (`X-Accel-Buffering: no`, `Cache-Control: no-cache, no-transform`) ensure compatibility with reverse proxies and CDNs.
+
+5. **Why Centralized Frontend `RealtimeService` & React Query Invalidation?**
+   - **Single Shared Socket**: Root-level singleton prevents duplicate SSE connections across page navigations.
+   - **Bounded Deduplication**: Maintains an in-memory FIFO ring buffer ($N = 1000$) of seen `event_id` strings to filter duplicate stream frames.
+   - **Authoritative REST Refetch**: Realtime events do not mutate client state directly; they invalidate specific React Query cache keys (`incidentKeys.detail(id)`, `dashboardKeys.all`, `analyticsKeys.all`), triggering immediate background refetches from authoritative REST endpoints.
+
+---
+
+### 5.3 Delivery Guarantees & Retention Semantics
+
+- **Delivery Guarantee**: **At-Least-Once Delivery**. Network interruptions or worker restarts before database status commits may result in duplicate event transmission. The frontend suppresses duplicate deliveries for event IDs retained in its bounded deduplication buffer. The system does not guarantee exactly-once delivery or processing.
+- **ID Separation**:
+  - `event_id` (UUID): Unique, immutable application event identifier generated at outbox creation; remains stable across worker retries and SSE replays.
+  - SSE `id` (Redis sequence): Temporal stream cursor (e.g., `1788095860922-0`) used strictly for stream positioning and `Last-Event-ID` replay.
+- **Retention Comparison**:
+  - **PostgreSQL Outbox Retention**: **72 hours** (`OUTBOX_WORKER_RETENTION_HOURS = 72`). Historical `PUBLISHED` rows older than 72 hours are pruned periodically. `DEAD_LETTER` rows are retained indefinitely.
+  - **Redis Stream Retention**: **~10,000 entries** (`REALTIME_STREAM_MAXLEN = 10000`). Bounded by count, not wall-clock time. If a disconnected client reconnects with an ID older than the stream head, the server emits `system.resync_required`.
+
+---
+
+### 5.4 Failure & Recovery Matrix
+
+| Failure Mode | Direct System Impact | Automated Recovery Mechanism |
+| :--- | :--- | :--- |
+| **PostgreSQL Transaction Rollback** | Mutation aborted. | Outbox row is rolled back with the transaction. Zero events emitted. |
+| **Redis Outage / Unreachable** | DB commit succeeds; `xadd` fails. | Worker records `last_error`, applies exponential backoff ($\min(300, 2^{\text{attempts}})\text{ s}$), and updates `next_retry_at`. Retries on subsequent loop. |
+| **Outbox Worker Crash** | Worker process dies mid-batch. | PostgreSQL transaction rolls back uncommitted status updates. Restarted worker resumes pending rows using stable `event_id`. |
+| **Redis Stream Trimmed (Stale Client)** | Disconnected client reconnects with expired `Last-Event-ID`. | SSE endpoint detects cursor mismatch and emits `system.resync_required`. Frontend invalidates all query caches and re-fetches full REST snapshots. |
+| **Client Network Disconnection** | TCP socket drops. | Native browser `EventSource` automatically attempts reconnection, supplying `Last-Event-ID` to replay missed events. |
+| **Browser Offline Mode** | Network lost completely. | `RealtimeService` traps `window.offline` event, closes dangling socket, and reconnects cleanly on `window.online`. |
+| **Max Retry Exceeded** | Outbox event fails 5 consecutive times. | Row transitions to `DEAD_LETTER` status. Error details preserved in `last_error` for operator inspection. Never pruned. |
 
 ---
 

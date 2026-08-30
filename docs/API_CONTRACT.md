@@ -241,3 +241,33 @@
   - `status`: Verification status filter (optional)
   - `bbox`: Bounding box (optional)
 
+---
+
+## 7. Real-Time Event Streaming Endpoints
+
+#### 17. Real-Time Server-Sent Events (SSE) Stream
+- **Method & Path**: `GET /api/v1/events/stream`
+- **Purpose**: Persistent HTTP Server-Sent Events (SSE) streaming channel broadcasting live domain state changes (incident intake, human verification status transitions, credibility assessment readiness, duplicate cluster merges, and system resync signals) to connected frontend clients.
+- **Transport Protocol**: HTTP Server-Sent Events (`text/event-stream; charset=utf-8`)
+- **Transport Headers**:
+  - `Content-Type`: `text/event-stream; charset=utf-8`
+  - `Cache-Control`: `no-cache, no-transform`
+  - `Connection`: `keep-alive`
+  - `X-Accel-Buffering`: `no`
+- **Query / Header Parameters**:
+  - `Last-Event-ID` (HTTP Header or `?last_event_id=...` Query Param): Redis Stream entry ID of the last successfully processed event (e.g., `1788095860922-0`). When supplied, the server automatically replays missed historical events from the stream buffer before switching to live broadcast.
+- **Keep-Alive Heartbeats**: Server automatically sends periodic SSE comment heartbeats (`: keepalive\n\n`) every 15 seconds during periods of inactivity to prevent intermediary proxies or NAT gateways from dropping the persistent TCP connection.
+- **Event Framing Format**:
+  ```http
+  id: 1788095860922-0
+  event: report.verification_changed
+  data: {"event_id":"550e8400-e29b-41d4-a716-446655440000","event_type":"report.verification_changed","occurred_at":"2026-08-30T13:00:00Z","entity_id":"rep-92bc018a","tracking_id":"RPT-2026-8921","payload":{"category_code":"FLOOD_WATERLOGGING","previous_status":"PENDING","new_status":"VERIFIED","reason":"Corroborated by radar","verified_at":"2026-08-30T13:00:00Z"}}
+  ```
+- **Canonical Event Types**:
+  1. `report.created`: Emitted when a new citizen incident report is committed to PostgreSQL.
+  2. `report.verification_changed`: Emitted when a human emergency officer transitions verification status (`VERIFIED`, `REJECTED`, `UNDER_REVIEW`, `DUPLICATE`).
+  3. `report.intelligence_ready`: Emitted when asynchronous machine credibility calculation and multi-sensor corroboration complete.
+  4. `cluster.updated`: Emitted when a spatiotemporal duplicate cluster is created, updated, or merged.
+  5. `system.resync_required`: Emitted when a client connects with a `Last-Event-ID` that has been pruned from the bounded Redis Stream buffer, instructing the client to invalidate all query caches and re-fetch authoritative REST snapshots.
+- **Privacy & Payload Safety**: Realtime payloads strictly contain sanitized public summaries. Personal phone numbers, auth tokens, passwords, operator notes, internal tracebacks, and sensitive database columns are stripped at the outbox staging boundary.
+
