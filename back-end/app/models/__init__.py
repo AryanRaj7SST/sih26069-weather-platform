@@ -7,6 +7,7 @@ from app.models.evidence import EvidenceItem, IncidentEvidenceLink
 from app.models.ingestion import IngestionRun
 from app.models.media import ReportMedia
 from app.models.observation import WeatherObservation
+from app.models.outbox import RealtimeOutbox
 from app.models.report import WeatherReport
 from app.models.source import Source
 from app.models.user import User
@@ -26,6 +27,7 @@ __all__ = [
     "DuplicateCluster",
     "DuplicateMember",
     "VerificationEvent",
+    "RealtimeOutbox",
     "IngestionRun",
     "AuditLog",
 ]

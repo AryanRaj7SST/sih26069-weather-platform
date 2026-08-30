@@ -19,6 +19,7 @@ from app.models.source import Source
 from app.models.user import User
 from app.models.verification import VerificationEvent
 from app.schemas.report import CitizenReportCreate
+from app.services.realtime_service import RealtimeService, realtime_service
 from app.services.storage import StorageService, storage_service
 
 
@@ -51,8 +52,13 @@ ALLOWED_VERIFICATION_TRANSITIONS: Dict[str, set[str]] = {
 class ReportService:
     """Business logic service for citizen weather reports."""
 
-    def __init__(self, storage: Optional[StorageService] = None) -> None:
+    def __init__(
+        self,
+        storage: Optional[StorageService] = None,
+        realtime_svc: Optional[RealtimeService] = None,
+    ) -> None:
         self.storage = storage or storage_service
+        self.realtime_svc = realtime_svc or realtime_service
 
     @staticmethod
     def generate_tracking_id() -> str:
@@ -183,8 +189,19 @@ class ReportService:
             for media in media_records:
                 session.add(media)
 
+            # Stage outbox row inside the atomic database transaction
+            outbox_row = self.realtime_svc.stage_report_created(
+                session=session,
+                report=report,
+                category_code=payload.category_code,
+                has_media=len(media_records) > 0,
+            )
+
             await session.commit()
             await session.refresh(report)
+
+            # Fast-path publish to Redis Stream (worker retries if this fails or network blips)
+            await self.realtime_svc.publish_staged_outbox(outbox_row)
 
             return report, len(media_records)
 
@@ -386,6 +403,16 @@ class ReportService:
             action_metadata=action_metadata,
         )
         session.add(verification_event)
+
+        # Stage outbox row inside the atomic database transaction
+        outbox_row = self.realtime_svc.stage_verification_changed(
+            session=session,
+            report=report,
+            previous_status=previous_status,
+            new_status=clean_status,
+            category_code=report.reported_category,
+        )
+
         await session.commit()
 
         # Re-query with populate_existing=True to eagerly load verification_events
@@ -401,7 +428,12 @@ class ReportService:
         )
         res = await session.execute(stmt)
         refreshed = res.scalar_one_or_none()
-        return refreshed or report
+        final_report = refreshed or report
+
+        # Fast-path publish to Redis Stream (worker retries if this fails or network blips)
+        await self.realtime_svc.publish_staged_outbox(outbox_row)
+
+        return final_report
 
     async def get_or_create_source(
         self,
@@ -514,6 +546,15 @@ class ReportService:
             raw_payload=event.raw_payload,
         )
         session.add(report)
+
+        # Stage outbox row inside the atomic database transaction
+        outbox_row = self.realtime_svc.stage_report_created(
+            session=session,
+            report=report,
+            category_code=reported_cat,
+            has_media=False,
+        )
+
         await session.commit()
 
         stmt = (
@@ -525,7 +566,12 @@ class ReportService:
             )
         )
         res = await session.execute(stmt)
-        return res.scalar_one()
+        persisted = res.scalar_one()
+
+        # Fast-path publish to Redis Stream
+        await self.realtime_svc.publish_staged_outbox(outbox_row)
+
+        return persisted
 
 
 report_service = ReportService()

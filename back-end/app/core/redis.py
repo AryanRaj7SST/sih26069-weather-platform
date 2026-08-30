@@ -191,6 +191,27 @@ class AsyncRedisClient:
                 return True
             raise
 
+    def _parse_stream_entries(self, raw_entries: Any) -> List[Tuple[str, Dict[str, str]]]:
+        """Parse raw Redis list of stream entries into typed tuples.
+
+        Expected format: [[id, [k1, v1, k2, v2, ...]], ...]
+        """
+        if not raw_entries or not isinstance(raw_entries, list):
+            return []
+        parsed: List[Tuple[str, Dict[str, str]]] = []
+        for entry in raw_entries:
+            if not isinstance(entry, list) or len(entry) < 2:
+                continue
+            m_id = str(entry[0])
+            raw_fields = entry[1]
+            f_dict: Dict[str, str] = {}
+            if isinstance(raw_fields, list):
+                for i in range(0, len(raw_fields), 2):
+                    if i + 1 < len(raw_fields):
+                        f_dict[str(raw_fields[i])] = str(raw_fields[i + 1])
+            parsed.append((m_id, f_dict))
+        return parsed
+
     async def xreadgroup(
         self,
         group: str,
@@ -223,26 +244,77 @@ class AsyncRedisClient:
         for stream_item in raw_response:
             if not isinstance(stream_item, list) or len(stream_item) < 2:
                 continue
-            stream_name = stream_item[0]
+            stream_name = str(stream_item[0])
             entries_list = stream_item[1]
-            parsed_entries: List[Tuple[str, Dict[str, str]]] = []
-
-            if isinstance(entries_list, list):
-                for entry in entries_list:
-                    if not isinstance(entry, list) or len(entry) < 2:
-                        continue
-                    m_id = entry[0]
-                    raw_fields = entry[1]
-                    f_dict: Dict[str, str] = {}
-                    if isinstance(raw_fields, list):
-                        for i in range(0, len(raw_fields), 2):
-                            if i + 1 < len(raw_fields):
-                                f_dict[str(raw_fields[i])] = str(raw_fields[i + 1])
-                    parsed_entries.append((m_id, f_dict))
-
+            parsed_entries = self._parse_stream_entries(entries_list)
             parsed_streams.append((stream_name, parsed_entries))
 
         return parsed_streams
+
+    async def xread(
+        self,
+        streams: Dict[str, str],
+        count: Optional[int] = None,
+        block_ms: Optional[int] = None,
+    ) -> List[Tuple[str, List[Tuple[str, Dict[str, str]]]]]:
+        """Read entries from one or more Redis streams directly (standalone streaming/replay).
+
+        Returns list of (stream_name, list_of_(msg_id, fields_dict)).
+        """
+        cmd: List[Union[str, bytes, int, float]] = ["XREAD"]
+        if count is not None:
+            cmd.extend(["COUNT", str(count)])
+        if block_ms is not None:
+            cmd.extend(["BLOCK", str(block_ms)])
+
+        cmd.append("STREAMS")
+        for stream_name in streams.keys():
+            cmd.append(stream_name)
+        for msg_id in streams.values():
+            cmd.append(msg_id)
+
+        raw_response = await self._execute_raw(*cmd)
+        if not raw_response or not isinstance(raw_response, list):
+            return []
+
+        parsed_streams: List[Tuple[str, List[Tuple[str, Dict[str, str]]]]] = []
+        for stream_item in raw_response:
+            if not isinstance(stream_item, list) or len(stream_item) < 2:
+                continue
+            stream_name = str(stream_item[0])
+            entries_list = stream_item[1]
+            parsed_entries = self._parse_stream_entries(entries_list)
+            parsed_streams.append((stream_name, parsed_entries))
+
+        return parsed_streams
+
+    async def xrange(
+        self,
+        stream: str,
+        min_id: str = "-",
+        max_id: str = "+",
+        count: Optional[int] = None,
+    ) -> List[Tuple[str, Dict[str, str]]]:
+        """Fetch range of entries from stream in ascending order."""
+        cmd: List[Union[str, bytes, int, float]] = ["XRANGE", stream, min_id, max_id]
+        if count is not None:
+            cmd.extend(["COUNT", str(count)])
+        raw_response = await self._execute_raw(*cmd)
+        return self._parse_stream_entries(raw_response)
+
+    async def xrevrange(
+        self,
+        stream: str,
+        max_id: str = "+",
+        min_id: str = "-",
+        count: Optional[int] = None,
+    ) -> List[Tuple[str, Dict[str, str]]]:
+        """Fetch range of entries from stream in descending order."""
+        cmd: List[Union[str, bytes, int, float]] = ["XREVRANGE", stream, max_id, min_id]
+        if count is not None:
+            cmd.extend(["COUNT", str(count)])
+        raw_response = await self._execute_raw(*cmd)
+        return self._parse_stream_entries(raw_response)
 
     async def xack(self, stream: str, group: str, *ids: str) -> int:
         """Acknowledge one or more message IDs in a consumer group."""

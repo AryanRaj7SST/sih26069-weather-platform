@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     # Cache & Event Streaming (Redis)
     REDIS_URL: str = "redis://localhost:6379/0"
+    REALTIME_STREAM_NAME: str = "stream:weather:realtime"
+    REALTIME_STREAM_MAXLEN: int = 10000
 
     # Object Storage (MinIO / S3)
     S3_ENDPOINT_URL: str = "http://localhost:9000"

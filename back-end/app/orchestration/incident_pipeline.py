@@ -17,6 +17,7 @@ from app.models.report import WeatherReport
 from app.orchestration.dependency_graph import DependencyGraph
 from app.orchestration.events import (
     FailureClass,
+    OverallReadiness,
     StageExecutionResult,
     StageName,
     StageOutcome,
@@ -40,6 +41,7 @@ from app.orchestration.state import (
     load_orchestration_state,
     update_stage_state,
 )
+from app.services.realtime_service import realtime_service
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,7 @@ class IncidentPipeline:
 
         state = load_orchestration_state(report)
         stages_order = DependencyGraph.get_pipeline_execution_order()
+        current_report: WeatherReport = report
 
         for stage_name in stages_order:
             # Check prerequisites
@@ -128,11 +131,11 @@ class IncidentPipeline:
                 select(WeatherReport).where(WeatherReport.id == incident_id).with_for_update()
             )
             lock_res = await db.execute(lock_stmt)
-            locked_report = lock_res.scalar_one_or_none() or report
+            current_report = lock_res.scalar_one_or_none() or report
 
             # Update per-stage state on locked row
             state = update_stage_state(
-                report=locked_report,
+                report=current_report,
                 stage_name=stage_name,
                 outcome=result.outcome,
                 attempt=current_attempt,
@@ -146,8 +149,19 @@ class IncidentPipeline:
             # Flush stage state changes
             await db.flush()
 
+        outbox_row = None
+        if state.overall_readiness == OverallReadiness.INTELLIGENCE_READY:
+            outbox_row = realtime_service.stage_intelligence_ready(
+                session=db,
+                report=current_report,
+                credibility_score=float(current_report.credibility_score or 0.0),
+                readiness=state.overall_readiness.value,
+            )
+
         if commit:
             await db.commit()
+            if outbox_row is not None:
+                await realtime_service.publish_staged_outbox(outbox_row)
 
         logger.info(
             "Completed intelligence pipeline for incident %s -> readiness: %s",
