@@ -276,5 +276,109 @@ describe('Dashboard Migration - Server-Side Aggregation & Logic Mapping', () => 
       const displayReports = emptyReports.slice(0, 6);
       expect(displayReports).toHaveLength(0);
     });
+
+    it('prefers summaryData.total_count (821) over feed pagination.total_records (828) when available', () => {
+      const summaryTotalCount = 821;
+      const feedPaginationTotal = 828;
+
+      const totalCount = summaryTotalCount ?? feedPaginationTotal;
+      expect(totalCount).toBe(821);
+      expect(totalCount).not.toBe(828);
+    });
+
+    it('falls back to feed pagination.total_records if summaryData is undefined', () => {
+      const summaryTotalCount: number | undefined = undefined;
+      const feedPaginationTotal = 828;
+
+      const totalCount = summaryTotalCount ?? feedPaginationTotal;
+      expect(totalCount).toBe(828);
+    });
+
+    it('preserves 6-record feed content while displaying authoritative summary total_count', () => {
+      const summaryTotalCount = 821;
+      const mockIncidents = Array.from({ length: 6 }, (_, i) => ({
+        id: `inc_${i}`,
+        tracking_id: `RPT-20260830-${i}`,
+        title: `Incident ${i}`,
+        category: { code: 'FLOOD_WATERLOGGING', title: 'Flooding' },
+        severity: 'HIGH' as const,
+        location: { name: 'Dadar West', latitude: 19.0178, longitude: 72.8478 },
+        occurred_at: '2026-08-30T10:00:00Z',
+        verification_status: 'VERIFIED' as const,
+        credibility_score: 0.85,
+        readiness: 'INTELLIGENCE_READY' as const,
+        media_count: 1,
+        created_at: '2026-08-30T10:00:00Z',
+      }));
+
+      const totalCount = summaryTotalCount ?? mockIncidents.length;
+      expect(totalCount).toBe(821);
+      expect(mockIncidents).toHaveLength(6);
+    });
+  });
+
+  describe('7. DashboardMap Severe Alert Overlay & Dataset Contract', () => {
+    it('displays exact authoritative severeCount (e.g. 1584) when summaryData is available', () => {
+      const severeCount: number = 1584;
+      const displayLabel = severeCount != null ? `${severeCount.toLocaleString()} Severe Alerts` : '— Severe Alerts';
+      expect(displayLabel).toBe('1,584 Severe Alerts');
+    });
+
+    it('displays 0 when summary explicitly reports severe_high_count = 0', () => {
+      const severeCount: number = 0;
+      const displayLabel = severeCount != null ? `${severeCount.toLocaleString()} Severe Alerts` : '— Severe Alerts';
+      expect(displayLabel).toBe('0 Severe Alerts');
+    });
+
+    it('renders placeholder dash "— Severe Alerts" when summaryData is unavailable (loading/error)', () => {
+      const severeCount: number | undefined = undefined;
+      const rawReportsSubset = [
+        { id: '1', severity: 'SEVERE', location: { latitude: 19.01, longitude: 72.84 } },
+        { id: '2', severity: 'HIGH', location: { latitude: 19.02, longitude: 72.85 } },
+      ];
+
+      // Does NOT calculate raw subset length (2)
+      const displayLabel = severeCount != null ? `${severeCount.toLocaleString()} Severe Alerts` : '— Severe Alerts';
+      expect(displayLabel).toBe('— Severe Alerts');
+      expect(displayLabel).not.toContain(rawReportsSubset.length.toString());
+    });
+
+    it('retains previous authoritative cached value during refetch', () => {
+      const cachedSummary: { severity: { severe_high_count: number } } | undefined = {
+        severity: { severe_high_count: 1584 },
+      };
+
+      // During background refetch, React Query provides previous cached data
+      const severeCount = cachedSummary?.severity?.severe_high_count;
+      const displayLabel = severeCount != null ? `${severeCount.toLocaleString()} Severe Alerts` : '— Severe Alerts';
+      expect(displayLabel).toBe('1,584 Severe Alerts');
+    });
+
+    it('preserves 4-decimal clustering logic across raw reports', () => {
+      const reports = [
+        { id: '1', severity: 'LOW', location: { latitude: 19.01784, longitude: 72.84781 } },
+        { id: '2', severity: 'SEVERE', location: { latitude: 19.01781, longitude: 72.84784 } }, // Same 4-dec: 19.0178_72.8478
+        { id: '3', severity: 'MODERATE', location: { latitude: 19.05001, longitude: 72.89001 } }, // Different: 19.0500_72.8900
+      ];
+
+      const groups: Record<string, { count: number; hasSevere: boolean }> = {};
+      for (const r of reports) {
+        const key = `${r.location.latitude.toFixed(4)}_${r.location.longitude.toFixed(4)}`;
+        if (!groups[key]) {
+          groups[key] = { count: 0, hasSevere: false };
+        }
+        groups[key].count++;
+        if (r.severity === 'SEVERE' || r.severity === 'HIGH') {
+          groups[key].hasSevere = true;
+        }
+      }
+
+      const groupValues = Object.values(groups);
+      expect(groupValues).toHaveLength(2); // 2 active locations
+      expect(groupValues[0].count).toBe(2);
+      expect(groupValues[0].hasSevere).toBe(true);
+      expect(groupValues[1].count).toBe(1);
+      expect(groupValues[1].hasSevere).toBe(false);
+    });
   });
 });

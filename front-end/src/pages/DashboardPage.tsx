@@ -225,6 +225,7 @@ export const DashboardPage: React.FC = () => {
             <div className="lg:col-span-8">
               <DashboardMap
                 reports={reports}
+                severeCount={summaryData?.severity?.severe_high_count}
                 selectedReport={selectedReport}
                 onSelectReport={setSelectedReport}
                 targetRegion={targetRegion}
@@ -235,7 +236,7 @@ export const DashboardPage: React.FC = () => {
             <div className="lg:col-span-4">
               <RecentIncidentFeed
                 reports={recentIncidents}
-                totalCount={recentFeedResponse?.pagination?.total_records}
+                totalCount={summaryData?.total_count ?? recentFeedResponse?.pagination?.total_records}
                 selectedReport={selectedReport}
                 onSelectReport={(rep) => setSelectedReport(rep as ReportDetailData)}
                 isLoading={isRecentLoading}

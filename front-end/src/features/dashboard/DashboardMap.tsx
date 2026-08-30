@@ -19,6 +19,7 @@ interface DashboardMapProps {
   selectedReport: ReportDetailData | null;
   onSelectReport: (report: ReportDetailData | null) => void;
   targetRegion?: { center: [number, number]; zoom: number };
+  severeCount?: number;
 }
 
 interface IncidentGroup {
@@ -135,6 +136,7 @@ const MapControls: React.FC = () => {
 
 export const DashboardMap: React.FC<DashboardMapProps> = ({
   reports,
+  severeCount,
   selectedReport,
   onSelectReport,
   targetRegion,
@@ -177,10 +179,6 @@ export const DashboardMap: React.FC<DashboardMapProps> = ({
     }
 
     return Object.values(groups);
-  }, [reports]);
-
-  const severeCount = useMemo(() => {
-    return reports.filter((r) => r.severity === 'SEVERE' || r.severity === 'HIGH').length;
   }, [reports]);
 
   return (
@@ -251,7 +249,7 @@ export const DashboardMap: React.FC<DashboardMapProps> = ({
             <div className="mt-1 flex items-center space-x-1.5">
               <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
                 <span className="mr-1 h-1.5 w-1.5 rounded-full bg-red-600 animate-ping" />
-                {severeCount} Severe Alerts
+                {severeCount != null ? `${severeCount.toLocaleString()} Severe Alerts` : '— Severe Alerts'}
               </span>
             </div>
           </div>
