@@ -73,6 +73,8 @@ The platform strictly enforces the following domain separations:
 | **Phase 10: Executive Dashboard** | Live Leaflet map, KPI telemetry cards, category breakdown charts, spatial queries. | **COMPLETED & VERIFIED** |
 | **Phase 11: Verification & Triage** | Priority triage queue, side-by-side evidence inspection, status-aware action drawer, immutable audit log. | **COMPLETED & VERIFIED** |
 | **Incident Intelligence Frontend** | Multi-filter Incident Explorer (`/incidents`), 5-dimension Deep-Dive (`/incidents/:id`), Operator Portal (`/login`). | **COMPLETED & VERIFIED** |
+| **Phase 13: Analytics Platform** | Server-aggregated trends (`/api/v1/analytics/trends`), summary metrics, and two-tier regional demographics (`/api/v1/analytics/regional`). | **COMPLETED & VERIFIED** |
+| **Phase 12: Real-Time Event Streaming** | Server-Sent Events (SSE) notification channel via Redis Pub/Sub for live triage alerts. | *Next Implementation Phase* |
 | **Phase 14–15: Production Auth & Scale** | Role-based JWT/OAuth2 boundary, multi-region Kafka streaming, edge IoT mesh. | *Future Hardening Scope* |
 
 ---
@@ -119,6 +121,7 @@ npm run dev
 
 The application will be available at:
 - **Frontend Dashboard**: `http://localhost:5173`
+- **Weather Analytics**: `http://localhost:5173/analytics`
 - **Operator Access Portal**: `http://localhost:5173/login`
 - **Verification Queue**: `http://localhost:5173/admin/queue`
 - **Incident Explorer**: `http://localhost:5173/incidents`
@@ -131,10 +134,10 @@ The application will be available at:
 ### Backend Quality Suite
 ```bash
 cd back-end
-.venv/bin/pytest -q                       # Runs 254 unit and integration tests (100% passing)
-.venv/bin/mypy app tests                 # Full static typechecking (0 issues across 119 files)
+.venv/bin/pytest -q                       # Runs 266 unit and integration tests (100% passing)
+.venv/bin/mypy app tests                 # Full static typechecking (0 issues across 124 files)
 .venv/bin/ruff check .                   # Linter check (0 errors)
-.venv/bin/ruff format --check .          # Code formatting verification (123 files formatted)
+.venv/bin/ruff format --check .          # Code formatting verification (128 files formatted)
 pyrefly check                            # Python 3.14 static diagnostics (0 errors)
 ```
 
@@ -143,7 +146,7 @@ pyrefly check                            # Python 3.14 static diagnostics (0 err
 cd front-end
 npm run typecheck                        # TypeScript strict compiler check (0 errors)
 npm run lint                             # ESLint verification (0 errors, 0 warnings)
-npx vitest run                           # Runs 64 unit and contract tests (100% passing)
+npx vitest run                           # Runs 106 unit and contract tests (100% passing across 6 suites)
 npm run build                            # Production bundle build verification
 ```
 
