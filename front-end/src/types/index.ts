@@ -12,6 +12,7 @@ export * from './geo';
 export * from './verification';
 export * from './report';
 export * from './analytics';
+export * from './realtime';
 
 export interface HealthStatus {
   status: string;
