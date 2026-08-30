@@ -16,9 +16,11 @@ import { EventDistributionCard } from '@/features/dashboard/EventDistributionCar
 import { VerificationSummaryCard } from '@/features/dashboard/VerificationSummaryCard';
 import { dashboardApi } from '@/services/dashboardApi';
 import { fetchAllDashboardReports } from '@/services/reportApi';
-import { dashboardKeys } from '@/lib/queryKeys';
+import { incidentApi } from '@/services/incidentApi';
+import { dashboardKeys, incidentKeys } from '@/lib/queryKeys';
 import {
   DashboardSummaryQueryParams,
+  IncidentListQueryParams,
   ReportDetailData,
   ReportListQueryParams,
 } from '@/types';
@@ -84,7 +86,7 @@ export const DashboardPage: React.FC = () => {
     return undefined;
   }, [filters.timeRange]);
 
-  // Query parameters for raw reports (used by Map pins & Recent Incident Feed)
+  // Query parameters for raw reports (used by Map pins)
   const rawQueryParams: ReportListQueryParams = useMemo(() => {
     const params: ReportListQueryParams = {
       page: 1,
@@ -108,10 +110,9 @@ export const DashboardPage: React.FC = () => {
     return params;
   }, [filters, fromDate]);
 
-  // Fetch raw dataset for map markers and recent feed
+  // Fetch raw dataset for map markers
   const {
     data: rawResponse,
-    isLoading: isRawLoading,
     isFetching: isRawFetching,
     isError: isRawError,
     error: rawError,
@@ -124,6 +125,51 @@ export const DashboardPage: React.FC = () => {
 
   const reports = useMemo(() => rawResponse?.data || [], [rawResponse]);
 
+  // Query parameters for bounded recent incidents feed (page_size: 6, sorted by occurred_at DESC)
+  const recentFeedParams: IncidentListQueryParams = useMemo(() => {
+    const params: IncidentListQueryParams = {
+      page: 1,
+      page_size: 6,
+      sort_by: 'occurred_at',
+      sort_order: 'desc',
+    };
+
+    if (fromDate) {
+      params.from_date = fromDate;
+    }
+    if (filters.hazard !== 'ALL') {
+      params.category = filters.hazard;
+    }
+    if (filters.status !== 'ALL') {
+      params.verification_status = filters.status;
+    }
+    const regionInfo = REGIONS[filters.region];
+    if (regionInfo?.bbox) {
+      params.bbox = regionInfo.bbox;
+    }
+
+    return params;
+  }, [filters, fromDate]);
+
+  // Fetch bounded recent incidents for feed
+  const {
+    data: recentFeedResponse,
+    isLoading: isRecentLoading,
+    isFetching: isRecentFetching,
+    isError: isRecentError,
+    error: recentError,
+    refetch: refetchRecent,
+  } = useQuery({
+    queryKey: incidentKeys.list(recentFeedParams as Record<string, unknown>),
+    queryFn: ({ signal }) => incidentApi.listIncidents(recentFeedParams, signal),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  const recentIncidents = useMemo(
+    () => recentFeedResponse?.data || [],
+    [recentFeedResponse]
+  );
+
   const targetRegion = useMemo(() => {
     const reg = REGIONS[filters.region];
     return reg ? { center: reg.center, zoom: reg.zoom } : undefined;
@@ -132,11 +178,12 @@ export const DashboardPage: React.FC = () => {
   const handleRefresh = () => {
     refetchSummary();
     refetchRaw();
+    refetchRecent();
   };
 
-  const isFetching = isSummaryFetching || isRawFetching;
-  const isError = isSummaryError || isRawError;
-  const activeError = summaryError || rawError;
+  const isFetching = isSummaryFetching || isRawFetching || isRecentFetching;
+  const isError = isSummaryError || isRawError || isRecentError;
+  const activeError = summaryError || rawError || recentError;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50/60 text-slate-900 pb-16 md:pb-0">
@@ -187,10 +234,11 @@ export const DashboardPage: React.FC = () => {
             {/* Right 4 columns: Recent Incident Feed */}
             <div className="lg:col-span-4">
               <RecentIncidentFeed
-                reports={reports}
+                reports={recentIncidents}
+                totalCount={recentFeedResponse?.pagination?.total_records}
                 selectedReport={selectedReport}
-                onSelectReport={setSelectedReport}
-                isLoading={isRawLoading}
+                onSelectReport={(rep) => setSelectedReport(rep as ReportDetailData)}
+                isLoading={isRecentLoading}
               />
             </div>
           </div>

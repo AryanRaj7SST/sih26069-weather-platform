@@ -3,7 +3,7 @@
 import React from 'react';
 import { ListFilter, ExternalLink, ArrowRight, Sparkles, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ReportDetailData } from '@/types';
+import { IncidentSummary, ReportDetailData } from '@/types';
 import {
   formatHazardCategory,
   formatRelativeTime,
@@ -12,14 +12,16 @@ import {
 } from '@/lib/presentation';
 
 interface RecentIncidentFeedProps {
-  reports: ReportDetailData[];
-  selectedReport: ReportDetailData | null;
-  onSelectReport: (report: ReportDetailData) => void;
+  reports: (IncidentSummary | ReportDetailData)[];
+  totalCount?: number;
+  selectedReport: IncidentSummary | ReportDetailData | null;
+  onSelectReport: (report: IncidentSummary | ReportDetailData) => void;
   isLoading: boolean;
 }
 
 export const RecentIncidentFeed: React.FC<RecentIncidentFeedProps> = ({
   reports,
+  totalCount,
   selectedReport,
   onSelectReport,
   isLoading,
@@ -36,7 +38,7 @@ export const RecentIncidentFeed: React.FC<RecentIncidentFeedProps> = ({
         </div>
         <div className="flex items-center space-x-1.5">
           <div className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" aria-hidden="true" />
-          <span className="text-xs text-slate-500 font-semibold">{reports.length} Incidents</span>
+          <span className="text-xs text-slate-500 font-semibold">{totalCount ?? reports.length} Incidents</span>
         </div>
       </div>
 

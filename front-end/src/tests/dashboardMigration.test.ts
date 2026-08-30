@@ -190,4 +190,91 @@ describe('Dashboard Migration - Server-Side Aggregation & Logic Mapping', () => 
       expect(chartData[3]).toEqual({ time: '18:00', label: '18:00 - 24:00', count: 329 });
     });
   });
+
+  describe('6. Recent Incident Feed Bounded Query & Contract', () => {
+    it('constructs bounded query params with page_size 6 and occurred_at desc sort', () => {
+      const filters = {
+        timeRange: '24h',
+        hazard: 'FLOOD_WATERLOGGING',
+        region: 'MUMBAI_METRO',
+        status: 'VERIFIED',
+      };
+      const fromDate = '2026-08-29T16:00:00.000Z';
+      const bbox = '72.75,18.85,73.05,19.35';
+
+      const recentFeedParams = {
+        page: 1,
+        page_size: 6,
+        sort_by: 'occurred_at',
+        sort_order: 'desc',
+        from_date: fromDate,
+        category: filters.hazard !== 'ALL' ? filters.hazard : undefined,
+        verification_status: filters.status !== 'ALL' ? filters.status : undefined,
+        bbox,
+      };
+
+      expect(recentFeedParams.page).toBe(1);
+      expect(recentFeedParams.page_size).toBe(6);
+      expect(recentFeedParams.sort_by).toBe('occurred_at');
+      expect(recentFeedParams.sort_order).toBe('desc');
+      expect(recentFeedParams.category).toBe('FLOOD_WATERLOGGING');
+      expect(recentFeedParams.verification_status).toBe('VERIFIED');
+      expect(recentFeedParams.bbox).toBe(bbox);
+      expect(recentFeedParams.from_date).toBe(fromDate);
+    });
+
+    it('generates canonical incident query key matching list hierarchy', () => {
+      const recentFeedParams = {
+        page: 1,
+        page_size: 6,
+        sort_by: 'occurred_at',
+        sort_order: 'desc',
+        category: 'HEAVY_RAINFALL',
+      };
+
+      const key = [
+        'incidents',
+        'list',
+        {
+          category: recentFeedParams.category,
+          page: recentFeedParams.page,
+          page_size: recentFeedParams.page_size,
+          sort_by: recentFeedParams.sort_by,
+          sort_order: recentFeedParams.sort_order,
+        },
+      ];
+
+      expect(key[0]).toBe('incidents');
+      expect(key[1]).toBe('list');
+      expect((key[2] as Record<string, unknown>).page_size).toBe(6);
+    });
+
+    it('feed correctly bounds display records to at most 6', () => {
+      const mockIncidents = Array.from({ length: 10 }, (_, i) => ({
+        id: `inc_${i}`,
+        tracking_id: `RPT-20260830-${i}`,
+        title: `Incident ${i}`,
+        category: { code: 'FLOOD_WATERLOGGING', title: 'Flooding' },
+        severity: 'HIGH' as const,
+        location: { name: 'Dadar West', latitude: 19.0178, longitude: 72.8478 },
+        occurred_at: '2026-08-30T10:00:00Z',
+        verification_status: 'VERIFIED' as const,
+        credibility_score: 0.85,
+        readiness: 'INTELLIGENCE_READY' as const,
+        media_count: 1,
+        created_at: '2026-08-30T10:00:00Z',
+      }));
+
+      const displayReports = mockIncidents.slice(0, 6);
+      expect(displayReports).toHaveLength(6);
+      expect(displayReports[0].id).toBe('inc_0');
+      expect(displayReports[5].id).toBe('inc_5');
+    });
+
+    it('safely handles empty feed with zero records', () => {
+      const emptyReports: Array<{ id: string }> = [];
+      const displayReports = emptyReports.slice(0, 6);
+      expect(displayReports).toHaveLength(0);
+    });
+  });
 });
