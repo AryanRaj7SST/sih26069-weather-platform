@@ -2,8 +2,8 @@
 
 **Platform**: National Weather Big Data Analytics Platform (Smart India Hackathon 2026 — Problem Statement ID: `SIH26069`)
 **Domain**: Big Data Analytics / Disaster Management / Geospatial Intelligence
-**Document Status**: **ACTIVE SOURCE OF TRUTH (FROZEN AT COMMIT `bc9c71c`)**
-**Last Synchronized**: 2026-08-30
+**Document Status**: **ACTIVE SOURCE OF TRUTH (ENGINEERING FREEZE AT COMMIT `1e26ce4`)**
+**Last Synchronized**: 2026-08-31
 
 ---
 
@@ -12,13 +12,13 @@
 | Attribute | Current Value / State |
 | :--- | :--- |
 | **Git Branch** | `main` |
-| **Current HEAD Commit** | `bc9c71c1017d7a969432c54f01c37d569fe25848` (`bc9c71c`) |
-| **Commit Subject** | `feat: harden realtime outbox worker runtime` |
+| **Current HEAD Commit** | `1e26ce4705f1ec87c629734539ead85303e81843` (`1e26ce4`) |
+| **Commit Subject** | `refactor(map): migrate Dashboard and LiveMap to GeoJSON` |
 | **Working Tree State** | **Clean** (`0` uncommitted changes, fully synchronized with `origin/main`) |
-| **Backend Test Gate** | **322 passed, 1 skipped** (`pytest -q` across 22 test suites in 44.84s) |
-| **Frontend Test Gate** | **152 passed** (`vitest run` across 9 test suites in 378ms) |
+| **Backend Test Gate** | **325 passed, 1 skipped** (`pytest -q` across 22 test suites in ~46s) |
+| **Frontend Test Gate** | **160 passed** (`vitest run` across 11 test suites in ~430ms) |
 | **Backend Static Gates** | `mypy` (0 issues across 136 source files), `ruff check` (0 errors), `ruff format` (141 files clean), `pyrefly` (0 errors) |
-| **Frontend Static Gates** | `tsc --noEmit` (0 errors), `eslint` (0 warnings/errors), `vite build` (production bundle built in 1.82s) |
+| **Frontend Static Gates** | `tsc --noEmit` (0 errors), `eslint` (0 warnings/errors), `vite build` (production bundle built in ~1.9s) |
 
 ---
 
@@ -35,12 +35,13 @@
 | **Physical Corroboration** | Real-time corroboration against proximate physical automated weather stations (IMD AWS telemetry) and river gauges. | **COMPLETED & VERIFIED** | [observation_corroboration_service.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/observation_corroboration_service.py), `physical_station_observations`. |
 | **Evidence Linking** | Provenance linking of cross-platform digital news, social posts, and official alerts. | **COMPLETED & VERIFIED** | [evidence_linking_service.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/evidence_linking_service.py), `digital_evidence_items`. |
 | **Explainable Credibility** | Deterministic multi-factor machine scoring ($0.0000$ to $0.9800$) with transparent component breakdown. | **COMPLETED & VERIFIED** | [credibility_engine.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/credibility_engine.py), `credibility_explanation` JSON breakdown. |
-| **Executive Dashboard** | Interactive Leaflet GIS map with viewport clustering, macro KPI cards, and severity breakdown. | **COMPLETED & VERIFIED** | [DashboardPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/DashboardPage.tsx), `GET /api/v1/dashboard/summary`, `GET /api/v1/geo/incidents`. |
+| **Executive Dashboard** | Interactive Leaflet GIS map with bounded GeoJSON queries (`GET /api/v1/geo/incidents`), macro KPI cards, and severity breakdown. | **COMPLETED & VERIFIED** | [DashboardPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/DashboardPage.tsx), `GET /api/v1/dashboard/summary`, `GET /api/v1/geo/incidents`. |
+| **Live GIS Map** | Fullscreen operational Leaflet map with bounded GeoJSON layer, 500-feature bound, lazy detail fetching (`GET /api/v1/incidents/{id}`), and fallback resilience. | **COMPLETED & VERIFIED** | [LiveMapPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/LiveMapPage.tsx), [LiveMapContainer.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/features/map/LiveMapContainer.tsx), `GET /api/v1/geo/incidents`. |
 | **Analytics Platform** | Dedicated weather big-data analytics interface with temporal trend charts, category distributions, and regional demographics. | **COMPLETED & VERIFIED** | [AnalyticsPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/AnalyticsPage.tsx), `GET /api/v1/analytics/trends`, `GET /api/v1/analytics/regional`. |
 | **Incident Deep-Dive** | 5-dimension forensic intelligence inspection (Credibility, Clusters, Evidence, Physical Sensors, Pipeline Stage Telemetry). | **COMPLETED & VERIFIED** | [IncidentDetailPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/IncidentDetailPage.tsx), [IncidentExplorerPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/IncidentExplorerPage.tsx). |
 | **Verification & Triage** | Priority triage backlog for emergency operators with immutable audit logging and terminal state enforcement. | **COMPLETED & VERIFIED** | [VerificationQueuePage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/VerificationQueuePage.tsx), `POST /api/v1/verification/*`, `verification_events`. |
 | **Real-Time Streaming (SSE)** | Transactional outbox pattern, Redis Streams buffer, FastAPI SSE endpoint, centralized frontend event manager, and React Query invalidation. | **COMPLETED & VERIFIED** | `GET /api/v1/events/stream`, [outbox_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/outbox_worker.py), [realtimeService.ts](file:///Users/akshatjain/Documents/SIH/front-end/src/services/realtimeService.ts). |
-| **Production Auth & RBAC** | Institutional JWT/OAuth2 boundary with cryptographically signed tokens and role-based permissions. | **FUTURE EXTENSION** | Current MVP uses institutional Emergency Operations Portal (`/login`) with audit logging. |
+| **Production Auth & RBAC** | Institutional JWT/OAuth2 boundary with cryptographically signed tokens and role-based permissions. | **FUTURE EXTENSION** | Current MVP uses institutional Emergency Operations Portal (`/login`) with audit logging; production RBAC is deferred. |
 
 ---
 
@@ -93,18 +94,20 @@ Live Operator UI Updated Without Page Refresh
 
 ## 4. Operational Limits & Known MVP Boundaries
 
-1. **SSE Security Boundary**: Realtime SSE endpoint (`/api/v1/events/stream`) currently operates on the open read-oriented API model. Sensitive fields (passwords, auth tokens, phone numbers, operator notes, internal stack traces) are explicitly stripped at the outbox staging boundary.
+1. **SSE Security Boundary**: Realtime SSE endpoint (`/api/v1/events/stream`) operates on the open read-oriented API model. Sensitive fields (passwords, auth tokens, phone numbers, operator notes, internal stack traces) are explicitly stripped at the outbox staging boundary.
 2. **Worker Supervision**: The Outbox Worker runs as a dedicated, independent process (`python -m app.workers.run_outbox_worker`). Production supervisor integration (systemd, Supervisord, Kubernetes) remains an operational deployment responsibility.
 3. **Delivery Semantics**: At-least-once stream delivery. Duplicate delivery is possible. The frontend suppresses duplicate deliveries for event IDs retained in its bounded deduplication buffer. The system does not guarantee exactly-once delivery or processing.
-4. **Redis Stream Capacity**: Redis Stream `stream:weather:realtime` is capped at approximately 10,000 entries. Clients offline longer than the stream retention window receive `system.resync_required` to reconcile via REST.
+4. **Redis Stream Capacity**: Redis Stream `sih:realtime:events` is capped at approximately 10,000 entries. Clients offline longer than the stream retention window receive `system.resync_required` to reconcile via REST.
 5. **Outbox Retention**: PostgreSQL `realtime_outbox` retains published events for 72 hours before automated periodic pruning. Dead-letter rows are retained indefinitely.
+6. **500-Feature Map Bound**: GeoJSON map queries enforce a 500-feature server-side limit (`LIMIT 500`) to protect browser memory and rendering performance. Macro totals remain authoritatively computed via server summary endpoints.
+7. **Cloud Observability**: Application uses structured logging; distributed tracing (OpenTelemetry / APM) remains deferred for cloud deployment.
 
 ---
 
-## 5. Next Steps & Product Hardening Roadmap
+## 5. Engineering Freeze Statement
 
-1. **Phase 14: Full-Product Hardening, Demo Scenarios & Gaps Audit**:
-   - End-to-end multi-hazard smoke tests across all application routes (`/`, `/report`, `/dashboard`, `/analytics`, `/incidents`, `/admin/queue`).
-   - Package curated emergency scenarios for Smart India Hackathon jury demonstrations (Mumbai Urban Deluge, Uttarakhand Flash Flood, Cyclone Landfall).
-2. **Phase 15: Production Security & Container Orchestration**:
-   - Formalize JWT token verification and institutional role-based access control (RBAC).
+- **Consistency**: The audited documentation set is consistent with the current implementation.
+- **Scope & Completeness**: The platform is functionally complete for the current SIH/MVP/demo scope, with documented production-hardening limitations remaining deferred.
+- **Verification Summary**: All automated quality gates passed, and the major user-facing workflows selected for manual browser verification passed.
+- **Freeze Status**: **ENGINEERING FEATURE DEVELOPMENT IS NOW FROZEN FOR SIH/MVP SCOPE.**
+- **Next Phase**: Transition to product study, jury presentation preparation, and scenario walkthroughs.
