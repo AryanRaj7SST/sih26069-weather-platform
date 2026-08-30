@@ -12,12 +12,12 @@ import {
   X,
   ArrowRight,
 } from 'lucide-react';
-import { ReportDetailData } from '@/types';
+import { MapIncidentPoint } from '@/features/map/adapters';
 
-interface DashboardMapProps {
-  reports: ReportDetailData[];
-  selectedReport: ReportDetailData | null;
-  onSelectReport: (report: ReportDetailData | null) => void;
+export interface DashboardMapProps {
+  reports: MapIncidentPoint[];
+  selectedReport: MapIncidentPoint | null;
+  onSelectReport: (report: MapIncidentPoint | null) => void;
   targetRegion?: { center: [number, number]; zoom: number };
   severeCount?: number;
 }
@@ -26,8 +26,8 @@ interface IncidentGroup {
   key: string;
   latitude: number;
   longitude: number;
-  reports: ReportDetailData[];
-  latestReport: ReportDetailData;
+  reports: MapIncidentPoint[];
+  latestReport: MapIncidentPoint;
   hasSevere: boolean;
 }
 
@@ -82,7 +82,7 @@ const createClusterIcon = (count: number, hasSevere: boolean, isSelected: boolea
 
 // Map controller to handle pan/zoom
 const MapController: React.FC<{
-  selectedReport: ReportDetailData | null;
+  selectedReport: MapIncidentPoint | null;
   targetRegion?: { center: [number, number]; zoom: number };
 }> = ({ selectedReport, targetRegion }) => {
   const map = useMap();
@@ -144,7 +144,7 @@ export const DashboardMap: React.FC<DashboardMapProps> = ({
   const defaultCenter: [number, number] = [20.5937, 78.9629];
   const defaultZoom = 5;
 
-  // Group coordinates to handle repeated coordinates cleanly
+  // Group coordinates to handle repeated coordinates cleanly (4-decimal precision)
   const locationGroups = useMemo<IncidentGroup[]>(() => {
     const groups: Record<string, IncidentGroup> = {};
 
@@ -165,13 +165,6 @@ export const DashboardMap: React.FC<DashboardMapProps> = ({
           };
         }
         groups[key].reports.push(report);
-        if (
-          report.media &&
-          report.media.length > 0 &&
-          (!groups[key].latestReport.media || groups[key].latestReport.media.length === 0)
-        ) {
-          groups[key].latestReport = report;
-        }
         if (report.severity === 'SEVERE' || report.severity === 'HIGH') {
           groups[key].hasSevere = true;
         }

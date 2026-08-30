@@ -137,20 +137,21 @@ export const incidentApi = {
   },
 
   /**
-   * Retrieve GeoJSON FeatureCollection bounded by PostGIS viewport.
+   * Retrieve GeoJSON FeatureCollection bounded by PostGIS viewport or national overview.
    */
   async getGeoIncidents(
-    bbox: string,
+    bbox?: string,
     params: { status?: string; category?: string; hours_ago?: number } = {},
     signal?: AbortSignal
   ): Promise<GeoJSONFeatureCollection> {
     const searchParams = new URLSearchParams();
-    searchParams.append('bbox', bbox);
+    if (bbox) searchParams.append('bbox', bbox);
     if (params.status && params.status !== 'ALL') searchParams.append('status', params.status);
     if (params.category && params.category !== 'ALL') searchParams.append('category', params.category);
     if (params.hours_ago) searchParams.append('hours_ago', params.hours_ago.toString());
 
-    return apiClient<GeoJSONFeatureCollection>(`/geo/incidents?${searchParams.toString()}`, { signal });
+    const query = searchParams.toString();
+    return apiClient<GeoJSONFeatureCollection>(`/geo/incidents${query ? `?${query}` : ''}`, { signal });
   },
 
   /**

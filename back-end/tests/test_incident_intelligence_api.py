@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -1101,3 +1101,116 @@ async def test_media_url_safety_presigned_and_no_secret_leak(
     assert "media" in data
     # Safe structure
     assert isinstance(data["media"], list)
+
+
+@pytest.mark.asyncio
+async def test_geo_incidents_without_bbox_national_overview(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Verify GeoJSON FeatureCollection retrieval without bbox for national overview."""
+    uid = uuid.uuid4().hex[:8]
+    cat_code = f"CAT_NAT_{uid}".upper()
+    source = Source(
+        source_code=f"SRC_NAT_{uid}",
+        name="National Geo Source",
+        source_type="CITIZEN_REPORT",
+        base_trust_score=0.75,
+        is_active=True,
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    report = WeatherReport(
+        tracking_id=f"RPT-NAT-{uid}",
+        source_id=source.id,
+        title="National Overview Incident",
+        reported_category=cat_code,
+        severity="SEVERE",
+        latitude=13.0827,  # Chennai
+        longitude=80.2707,
+        geom="SRID=4326;POINT(80.2707 13.0827)",
+        occurred_at=datetime.now(timezone.utc),
+        processing_status="COMPLETED",
+        verification_status="VERIFIED",
+        credibility_score=0.8500,
+    )
+    db_session.add(report)
+    await db_session.commit()
+
+    # 1. Query without bbox
+    res = await api_client.get(f"/api/v1/geo/incidents?category={cat_code}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["type"] == "FeatureCollection"
+    assert "features" in body
+    assert len(body["features"]) <= 500
+    assert any(f["properties"]["tracking_id"] == f"RPT-NAT-{uid}" for f in body["features"])
+
+    feature = next(
+        f for f in body["features"] if f["properties"]["tracking_id"] == f"RPT-NAT-{uid}"
+    )
+    assert feature["geometry"]["type"] == "Point"
+    assert feature["geometry"]["coordinates"] == [80.2707, 13.0827]
+    assert feature["properties"]["severity"] == "SEVERE"
+    assert feature["properties"]["verification_status"] == "VERIFIED"
+    assert feature["properties"]["credibility_score"] == 0.8500
+
+
+@pytest.mark.asyncio
+async def test_geo_incidents_filtering_status_and_all_time(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Verify GeoJSON filtering by status and all-time query without bbox."""
+    uid = uuid.uuid4().hex[:8]
+    cat_code = f"CAT_GEO_FILT_{uid}".upper()
+    source = Source(
+        source_code=f"SRC_GF_{uid}",
+        name="Geo Filter Source",
+        source_type="CITIZEN_REPORT",
+        base_trust_score=0.70,
+        is_active=True,
+    )
+    db_session.add(source)
+    await db_session.flush()
+
+    report_verified = WeatherReport(
+        tracking_id=f"RPT-GF-VER-{uid}",
+        source_id=source.id,
+        title="Verified Incident Filter Test",
+        reported_category=cat_code,
+        severity="HIGH",
+        latitude=15.3173,
+        longitude=75.7139,
+        geom="SRID=4326;POINT(75.7139 15.3173)",
+        occurred_at=datetime.now(timezone.utc) - timedelta(days=10),
+        processing_status="COMPLETED",
+        verification_status="VERIFIED",
+        credibility_score=0.9000,
+    )
+    report_pending = WeatherReport(
+        tracking_id=f"RPT-GF-PEN-{uid}",
+        source_id=source.id,
+        title="Pending Incident Filter Test",
+        reported_category=cat_code,
+        severity="MODERATE",
+        latitude=15.3173,
+        longitude=75.7139,
+        geom="SRID=4326;POINT(75.7139 15.3173)",
+        occurred_at=datetime.now(timezone.utc) - timedelta(days=10),
+        processing_status="COMPLETED",
+        verification_status="PENDING",
+        credibility_score=0.6000,
+    )
+    db_session.add_all([report_verified, report_pending])
+    await db_session.commit()
+
+    # Query with status=VERIFIED and hours_ago=720 (30 days)
+    res = await api_client.get(
+        f"/api/v1/geo/incidents?category={cat_code}&status=VERIFIED&hours_ago=720"
+    )
+    assert res.status_code == 200
+    features = res.json()["features"]
+    assert any(f["properties"]["tracking_id"] == f"RPT-GF-VER-{uid}" for f in features)
+    assert not any(f["properties"]["tracking_id"] == f"RPT-GF-PEN-{uid}" for f in features)

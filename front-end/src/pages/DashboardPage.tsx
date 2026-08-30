@@ -15,14 +15,14 @@ import { IncidentTrendCard } from '@/features/dashboard/IncidentTrendCard';
 import { EventDistributionCard } from '@/features/dashboard/EventDistributionCard';
 import { VerificationSummaryCard } from '@/features/dashboard/VerificationSummaryCard';
 import { dashboardApi } from '@/services/dashboardApi';
-import { fetchAllDashboardReports } from '@/services/reportApi';
 import { incidentApi } from '@/services/incidentApi';
 import { dashboardKeys, incidentKeys } from '@/lib/queryKeys';
+import { geoJSONToMapPoints, MapIncidentPoint } from '@/features/map/adapters';
 import {
   DashboardSummaryQueryParams,
   IncidentListQueryParams,
+  IncidentSummary,
   ReportDetailData,
-  ReportListQueryParams,
 } from '@/types';
 import { AlertTriangle } from 'lucide-react';
 
@@ -34,7 +34,7 @@ export const DashboardPage: React.FC = () => {
     status: 'ALL',
   });
 
-  const [selectedReport, setSelectedReport] = useState<ReportDetailData | null>(null);
+  const [selectedReport, setSelectedReport] = useState<MapIncidentPoint | null>(null);
 
   // Summary aggregation query parameters
   const summaryParams: DashboardSummaryQueryParams = useMemo(() => {
@@ -71,7 +71,43 @@ export const DashboardPage: React.FC = () => {
 
   const summaryData = summaryResponse?.data;
 
-  // Compute from_date based on timeRange filter for raw incident list (map & feed)
+  // Compute hours_ago for GeoJSON map query
+  const geoHoursAgo = useMemo(() => {
+    if (filters.timeRange === '24h') return 24;
+    if (filters.timeRange === '48h') return 48;
+    if (filters.timeRange === '7d') return 168;
+    return undefined; // All-time
+  }, [filters.timeRange]);
+
+  const geoRegionBbox = useMemo(() => {
+    const regionInfo = REGIONS[filters.region];
+    return regionInfo?.bbox || undefined;
+  }, [filters.region]);
+
+  const geoParams = useMemo(() => {
+    const p: { status?: string; category?: string; hours_ago?: number } = {};
+    if (filters.hazard !== 'ALL') p.category = filters.hazard;
+    if (filters.status !== 'ALL') p.status = filters.status;
+    if (geoHoursAgo) p.hours_ago = geoHoursAgo;
+    return p;
+  }, [filters.hazard, filters.status, geoHoursAgo]);
+
+  // Fetch GeoJSON FeatureCollection for situational map markers (single bounded request)
+  const {
+    data: geoResponse,
+    isFetching: isGeoFetching,
+    isError: isGeoError,
+    error: geoError,
+    refetch: refetchGeo,
+  } = useQuery({
+    queryKey: incidentKeys.geo(geoRegionBbox || '', geoParams as Record<string, unknown>),
+    queryFn: ({ signal }) => incidentApi.getGeoIncidents(geoRegionBbox, geoParams, signal),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  const mapPoints = useMemo(() => geoJSONToMapPoints(geoResponse), [geoResponse]);
+
+  // Compute from_date based on timeRange filter for bounded incident feed
   const fromDate = useMemo(() => {
     const now = Date.now();
     if (filters.timeRange === '24h') {
@@ -85,45 +121,6 @@ export const DashboardPage: React.FC = () => {
     }
     return undefined;
   }, [filters.timeRange]);
-
-  // Query parameters for raw reports (used by Map pins)
-  const rawQueryParams: ReportListQueryParams = useMemo(() => {
-    const params: ReportListQueryParams = {
-      page: 1,
-      page_size: 100,
-    };
-
-    if (fromDate) {
-      params.from_date = fromDate;
-    }
-    if (filters.hazard !== 'ALL') {
-      params.category = filters.hazard;
-    }
-    if (filters.status !== 'ALL') {
-      params.status = filters.status;
-    }
-    const regionInfo = REGIONS[filters.region];
-    if (regionInfo?.bbox) {
-      params.bbox = regionInfo.bbox;
-    }
-
-    return params;
-  }, [filters, fromDate]);
-
-  // Fetch raw dataset for map markers
-  const {
-    data: rawResponse,
-    isFetching: isRawFetching,
-    isError: isRawError,
-    error: rawError,
-    refetch: refetchRaw,
-  } = useQuery({
-    queryKey: ['dashboard-reports', rawQueryParams],
-    queryFn: () => fetchAllDashboardReports(rawQueryParams),
-    staleTime: 1000 * 60 * 2, // 2 minutes
-  });
-
-  const reports = useMemo(() => rawResponse?.data || [], [rawResponse]);
 
   // Query parameters for bounded recent incidents feed (page_size: 6, sorted by occurred_at DESC)
   const recentFeedParams: IncidentListQueryParams = useMemo(() => {
@@ -177,13 +174,37 @@ export const DashboardPage: React.FC = () => {
 
   const handleRefresh = () => {
     refetchSummary();
-    refetchRaw();
+    refetchGeo();
     refetchRecent();
   };
 
-  const isFetching = isSummaryFetching || isRawFetching || isRecentFetching;
-  const isError = isSummaryError || isRawError || isRecentError;
-  const activeError = summaryError || rawError || recentError;
+  const handleSelectFeedReport = (rep: IncidentSummary | ReportDetailData) => {
+    const match = mapPoints.find((p) => p.tracking_id === rep.tracking_id);
+    if (match) {
+      setSelectedReport(match);
+    } else if (rep.location?.latitude != null && rep.location?.longitude != null) {
+      const rawSev = (rep as { severity?: string | { level?: string } }).severity;
+      const sevStr = typeof rawSev === 'string' ? rawSev : rawSev?.level || 'MODERATE';
+      setSelectedReport({
+        id: rep.id,
+        tracking_id: rep.tracking_id,
+        title: rep.title,
+        severity: sevStr,
+        verification_status:
+          typeof rep.verification_status === 'string' ? rep.verification_status : 'PENDING',
+        occurred_at: rep.occurred_at || null,
+        location: {
+          latitude: rep.location.latitude,
+          longitude: rep.location.longitude,
+          name: rep.location.name,
+        },
+      });
+    }
+  };
+
+  const isFetching = isSummaryFetching || isGeoFetching || isRecentFetching;
+  const isError = isSummaryError || isGeoError || isRecentError;
+  const activeError = summaryError || geoError || recentError;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50/60 text-slate-900 pb-16 md:pb-0">
@@ -215,16 +236,15 @@ export const DashboardPage: React.FC = () => {
           {/* Row 1: KPI Summary Cards (Server-side Aggregated) */}
           <DashboardKpiCards
             summary={summaryData}
-            reports={reports}
             isLoading={isSummaryLoading}
           />
 
-          {/* Row 2: Situational Overview Map + Live Incident Feed (Raw Pin/Feed Data) */}
+          {/* Row 2: Situational Overview Map + Live Incident Feed (GeoJSON Map & Bounded Feed) */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Left 8 columns: Situational Map */}
             <div className="lg:col-span-8">
               <DashboardMap
-                reports={reports}
+                reports={mapPoints}
                 severeCount={summaryData?.severity?.severe_high_count}
                 selectedReport={selectedReport}
                 onSelectReport={setSelectedReport}
@@ -238,7 +258,7 @@ export const DashboardPage: React.FC = () => {
                 reports={recentIncidents}
                 totalCount={summaryData?.total_count ?? recentFeedResponse?.pagination?.total_records}
                 selectedReport={selectedReport}
-                onSelectReport={(rep) => setSelectedReport(rep as ReportDetailData)}
+                onSelectReport={handleSelectFeedReport}
                 isLoading={isRecentLoading}
               />
             </div>
@@ -248,18 +268,15 @@ export const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <IncidentTrendCard
               distribution={summaryData?.diurnal_distribution}
-              reports={reports}
               isLoading={isSummaryLoading}
             />
             <EventDistributionCard
               distribution={summaryData?.category_distribution}
-              reports={reports}
               isLoading={isSummaryLoading}
             />
             <VerificationSummaryCard
               verification={summaryData?.verification}
               totalCount={summaryData?.total_count}
-              reports={reports}
               isLoading={isSummaryLoading}
             />
           </div>

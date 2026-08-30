@@ -4,6 +4,7 @@ import React from 'react';
 import { ListFilter, ExternalLink, ArrowRight, Sparkles, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { IncidentSummary, ReportDetailData } from '@/types';
+import { MapIncidentPoint } from '@/features/map/adapters';
 import {
   formatHazardCategory,
   formatRelativeTime,
@@ -14,7 +15,7 @@ import {
 interface RecentIncidentFeedProps {
   reports: (IncidentSummary | ReportDetailData)[];
   totalCount?: number;
-  selectedReport: IncidentSummary | ReportDetailData | null;
+  selectedReport: IncidentSummary | ReportDetailData | MapIncidentPoint | null;
   onSelectReport: (report: IncidentSummary | ReportDetailData) => void;
   isLoading: boolean;
 }

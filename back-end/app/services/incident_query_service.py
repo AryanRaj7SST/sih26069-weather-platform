@@ -895,23 +895,22 @@ class IncidentQueryService:
     async def get_geo_incidents(
         self,
         session: AsyncSession,
-        bbox: Tuple[float, float, float, float],
+        bbox: Optional[Tuple[float, float, float, float]] = None,
         status: Optional[str] = None,
         category: Optional[str] = None,
-        hours_ago: int = 24,
+        hours_ago: Optional[int] = 24,
     ) -> GeoJSONFeatureCollection:
-        """Fetch GeoJSON FeatureCollection bounded by PostGIS viewport."""
-        min_lon, min_lat, max_lon, max_lat = bbox
-
-        envelope = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+        """Fetch GeoJSON FeatureCollection bounded by PostGIS viewport or nationwide overview."""
         stmt = (
             select(WeatherReport)
             .options(selectinload(WeatherReport.category))
-            .where(
-                WeatherReport.geom.isnot(None),
-                envelope.ST_Intersects(WeatherReport.geom),
-            )
+            .where(WeatherReport.geom.isnot(None))
         )
+
+        if bbox is not None:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            envelope = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+            stmt = stmt.where(envelope.ST_Intersects(WeatherReport.geom))
 
         if status:
             statuses = [s.strip().upper() for s in status.split(",") if s.strip()]
@@ -921,7 +920,7 @@ class IncidentQueryService:
         if category:
             stmt = stmt.where(WeatherReport.reported_category == category.strip().upper())
 
-        if hours_ago > 0:
+        if hours_ago is not None and hours_ago > 0:
             # Safe temporal restriction
             stmt = stmt.where(
                 WeatherReport.occurred_at >= func.now() - func.make_interval(0, 0, 0, 0, hours_ago)

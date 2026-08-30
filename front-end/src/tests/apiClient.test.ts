@@ -8,7 +8,6 @@ import {
   submitCitizenReport,
   fetchReportByTrackingId,
   fetchReportList,
-  fetchAllDashboardReports,
   verifyReport,
   rejectReport,
   markDuplicateReport,
@@ -474,34 +473,19 @@ describe('5. Backward Compatibility Facade (reportApi)', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('/api/v1/reports?category=HEAVY_RAINFALL&severity=SEVERE');
   });
 
-  it('fetchAllDashboardReports fetches parallel pages when pagination exceeds page 1', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers({ 'content-type': 'application/json' }),
-        json: async () => ({
-          success: true,
-          data: [{ id: 'rpt-1' }],
-          pagination: { page: 1, page_size: 100, total_records: 2, total_pages: 2, has_next: true, has_prev: false },
-          meta: { timestamp: '2026-08-29T12:00:00Z' },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers({ 'content-type': 'application/json' }),
-        json: async () => ({
-          success: true,
-          data: [{ id: 'rpt-2' }],
-          pagination: { page: 2, page_size: 100, total_records: 2, total_pages: 2, has_next: false, has_prev: true },
-          meta: { timestamp: '2026-08-29T12:00:00Z' },
-        }),
-      });
+  it('getGeoIncidents requests /api/v1/geo/incidents with optional bbox and filter query params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        type: 'FeatureCollection',
+        features: [],
+      }),
+    });
     global.fetch = fetchMock;
 
-    const res = await fetchAllDashboardReports();
-    expect(res.data).toHaveLength(2);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await incidentApi.getGeoIncidents(undefined, { category: 'FLOOD_WATERLOGGING', status: 'VERIFIED', hours_ago: 48 });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/geo/incidents?status=VERIFIED&category=FLOOD_WATERLOGGING&hours_ago=48');
   });
 
   it('verifyReport, rejectReport, markDuplicateReport, placeReportUnderReview delegate seamlessly', async () => {

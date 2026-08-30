@@ -10,14 +10,20 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ReportDetailData } from '@/types';
+import { ReportDetailData, IncidentDetailPublic } from '@/types';
+import { MapIncidentPoint } from '@/features/map/adapters';
 
 interface SelectedIncidentCardProps {
-  report: ReportDetailData;
+  report: ReportDetailData | IncidentDetailPublic | MapIncidentPoint;
+  isLoadingDetail?: boolean;
   onClose: () => void;
 }
 
-export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ report, onClose }) => {
+export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({
+  report,
+  isLoadingDetail = false,
+  onClose,
+}) => {
   const [mediaError, setMediaError] = useState<boolean>(false);
 
   // Reset media error state when selected report changes
@@ -25,10 +31,22 @@ export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ repo
     setMediaError(false);
   }, [report.id, report.tracking_id]);
 
-  const isVerified = report.verification_status === 'VERIFIED';
-  const isUnderReview = report.verification_status === 'UNDER_REVIEW';
+  const verificationStatus =
+    'verification_status' in report && typeof report.verification_status === 'string'
+      ? report.verification_status
+      : 'verification' in report && report.verification?.status
+      ? report.verification.status
+      : 'PENDING';
 
-  const formatReportTime = (dateStr: string) => {
+  const isVerified =
+    verificationStatus === 'VERIFIED' ||
+    ('verification' in report && Boolean(report.verification?.is_verified));
+  const isUnderReview =
+    verificationStatus === 'UNDER_REVIEW' ||
+    ('verification' in report && Boolean(report.verification?.is_under_review));
+
+  const formatReportTime = (dateStr?: string | null) => {
+    if (!dateStr) return 'Recent';
     try {
       const d = new Date(dateStr);
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) + ' IST';
@@ -37,8 +55,11 @@ export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ repo
     }
   };
 
-  const firstMedia = report.media && report.media.length > 0 ? report.media[0] : null;
+  const mediaList = 'media' in report && Array.isArray(report.media) ? report.media : [];
+  const firstMedia = mediaList.length > 0 ? mediaList[0] : null;
   const isVideo = firstMedia?.media_type === 'VIDEO';
+  const description = 'description' in report ? report.description : null;
+  const categoryTitle = report.category?.title || 'Weather Incident';
 
   return (
     <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xl overflow-hidden w-full max-w-sm sm:max-w-md animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -80,8 +101,13 @@ export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ repo
             <div className="flex flex-col items-center text-center">
               <ShieldAlert className="h-9 w-9 text-blue-400 mb-1.5 opacity-90" />
               <span className="text-xs font-semibold uppercase tracking-wider text-blue-200">
-                {report.category?.title || 'Weather Incident'}
+                {categoryTitle}
               </span>
+              {isLoadingDetail && (
+                <span className="text-[10px] text-blue-300 mt-1 animate-pulse">
+                  Loading incident media...
+                </span>
+              )}
               {mediaError && (
                 <span className="text-[10px] text-slate-400 mt-1">
                   Attached media preview unavailable
@@ -107,7 +133,7 @@ export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ repo
             ) : (
               <AlertCircle className="h-3 w-3" />
             )}
-            <span>{report.verification_status || 'PENDING'}</span>
+            <span>{verificationStatus}</span>
           </span>
         </div>
 
@@ -133,7 +159,12 @@ export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ repo
         <div className="mt-3 space-y-2 text-xs text-slate-600">
           <div className="flex items-center space-x-2">
             <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span>Reported: {formatReportTime(report.occurred_at || report.created_at)}</span>
+            <span>
+              Reported:{' '}
+              {formatReportTime(
+                report.occurred_at || ('created_at' in report ? report.created_at : null)
+              )}
+            </span>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -150,9 +181,9 @@ export const SelectedIncidentCard: React.FC<SelectedIncidentCardProps> = ({ repo
           <span>Lng: {report.location?.longitude?.toFixed(4)}</span>
         </div>
 
-        {report.description && (
+        {description && (
           <p className="mt-3 text-xs text-slate-600 line-clamp-2 leading-relaxed">
-            {report.description}
+            {description}
           </p>
         )}
 

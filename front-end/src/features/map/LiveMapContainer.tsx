@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Plus, Minus, Compass, Locate } from 'lucide-react';
-import { ReportDetailData } from '@/types';
+import { MapIncidentPoint } from '@/features/map/adapters';
 
 interface RegionInfo {
   center: [number, number];
@@ -12,10 +12,10 @@ interface RegionInfo {
   bbox?: string;
 }
 
-interface LiveMapContainerProps {
-  reports: ReportDetailData[];
-  selectedReport: ReportDetailData | null;
-  onSelectReport: (report: ReportDetailData) => void;
+export interface LiveMapContainerProps {
+  reports: MapIncidentPoint[];
+  selectedReport: MapIncidentPoint | null;
+  onSelectReport: (report: MapIncidentPoint) => void;
   targetRegion?: RegionInfo;
   onBoundsChange?: (bbox: string) => void;
 }
@@ -24,14 +24,14 @@ interface IncidentLocationGroup {
   key: string;
   latitude: number;
   longitude: number;
-  reports: ReportDetailData[];
-  latestReport: ReportDetailData;
+  reports: MapIncidentPoint[];
+  latestReport: MapIncidentPoint;
   hasSevere: boolean;
 }
 
 // Controller component to programmatically pan/zoom map on selection or region change
 const MapController: React.FC<{
-  selectedReport: ReportDetailData | null;
+  selectedReport: MapIncidentPoint | null;
   targetRegion?: RegionInfo;
 }> = ({ selectedReport, targetRegion }) => {
   const map = useMap();
@@ -245,11 +245,6 @@ export const LiveMapContainer: React.FC<LiveMapContainerProps> = ({
           };
         }
         groups[key].reports.push(report);
-        const hasMedia = 'media' in report && Array.isArray(report.media) && report.media.length > 0;
-        const currentHasMedia = 'media' in groups[key].latestReport && Array.isArray(groups[key].latestReport.media) && (groups[key].latestReport.media?.length ?? 0) > 0;
-        if (hasMedia && !currentHasMedia) {
-          groups[key].latestReport = report;
-        }
         if (report.severity === 'SEVERE' || report.severity === 'HIGH') {
           groups[key].hasSevere = true;
         }

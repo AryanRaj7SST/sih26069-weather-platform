@@ -71,47 +71,6 @@ export async function fetchReportList(
   return apiClient<ReportListResponse>(url);
 }
 
-export async function fetchAllDashboardReports(
-  params: ReportListQueryParams = {}
-): Promise<ReportListResponse> {
-  const firstPage = await fetchReportList({ ...params, page: 1, page_size: 100 });
-  const totalPages = firstPage.pagination?.total_pages || 1;
-  const totalRecords = firstPage.pagination?.total_records || firstPage.data.length;
-
-  if (totalPages <= 1 || firstPage.data.length >= totalRecords) {
-    return firstPage;
-  }
-
-  const maxPagesToFetch = Math.min(totalPages, 10);
-  const pagePromises: Promise<ReportListResponse>[] = [];
-
-  for (let pageNum = 2; pageNum <= maxPagesToFetch; pageNum++) {
-    pagePromises.push(fetchReportList({ ...params, page: pageNum, page_size: 100 }));
-  }
-
-  const remainingPages = await Promise.all(pagePromises);
-  const allData = [...firstPage.data];
-
-  for (const pageRes of remainingPages) {
-    allData.push(...pageRes.data);
-  }
-
-  return {
-    ...firstPage,
-    data: allData,
-    pagination: {
-      ...(firstPage.pagination || {
-        page: 1,
-        total_pages: totalPages,
-        total_records: totalRecords,
-        has_prev: false,
-      }),
-      page_size: allData.length,
-      has_next: false,
-    },
-  };
-}
-
 export async function verifyReport(
   id: string,
   notes?: string,

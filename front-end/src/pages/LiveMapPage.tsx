@@ -7,8 +7,9 @@ import { MapFilterBar, MapFilters } from '@/features/map/MapFilterBar';
 import { MapLegend } from '@/features/map/MapLegend';
 import { SelectedIncidentCard } from '@/features/map/SelectedIncidentCard';
 import { LiveMapContainer } from '@/features/map/LiveMapContainer';
-import { fetchReportList } from '@/services/reportApi';
-import { ReportDetailData, ReportListQueryParams } from '@/types';
+import { incidentApi } from '@/services/incidentApi';
+import { incidentKeys } from '@/lib/queryKeys';
+import { geoJSONToMapPoints, MapIncidentPoint } from '@/features/map/adapters';
 import { Info, AlertTriangle, Loader2 } from 'lucide-react';
 
 const REGION_BOUNDS: Record<string, { center: [number, number]; zoom: number; bbox?: string }> = {
@@ -61,90 +62,86 @@ export const LiveMapPage: React.FC = () => {
     status: 'ALL',
   });
 
-  const [selectedReport, setSelectedReport] = useState<ReportDetailData | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<MapIncidentPoint | null>(null);
 
-  // Compute from_date based on timeRange filter
-  const fromDate = useMemo(() => {
-    const now = Date.now();
-    if (filters.timeRange === '24h') {
-      return new Date(now - 24 * 60 * 60 * 1000).toISOString();
-    }
-    if (filters.timeRange === '48h') {
-      return new Date(now - 48 * 60 * 60 * 1000).toISOString();
-    }
-    if (filters.timeRange === '7d') {
-      return new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
-    }
-    return undefined;
+  // Compute hours_ago for GeoJSON query
+  const geoHoursAgo = useMemo(() => {
+    if (filters.timeRange === '24h') return 24;
+    if (filters.timeRange === '48h') return 48;
+    if (filters.timeRange === '7d') return 168;
+    return undefined; // All-time
   }, [filters.timeRange]);
 
-  // Construct query parameters matching the real backend GET /api/v1/reports
-  const queryParams: ReportListQueryParams = useMemo(() => {
-    const params: ReportListQueryParams = {
-      page: 1,
-      page_size: 100,
-    };
+  const targetRegion = REGION_BOUNDS[filters.state];
+  const activeBbox = targetRegion?.bbox || undefined;
 
-    if (fromDate) {
-      params.from_date = fromDate;
-    }
+  const geoParams = useMemo(() => {
+    const p: { status?: string; category?: string; hours_ago?: number } = {};
+    if (filters.hazard !== 'ALL') p.category = filters.hazard;
+    if (filters.status !== 'ALL') p.status = filters.status;
+    if (geoHoursAgo) p.hours_ago = geoHoursAgo;
+    return p;
+  }, [filters.hazard, filters.status, geoHoursAgo]);
 
-    if (filters.hazard !== 'ALL') {
-      params.category = filters.hazard;
-    }
-
-    if (filters.status !== 'ALL') {
-      params.status = filters.status;
-    }
-
-    // Map regional filter to spatial bounding box
-    const regionInfo = REGION_BOUNDS[filters.state];
-    if (regionInfo?.bbox) {
-      params.bbox = regionInfo.bbox;
-    }
-
-    return params;
-  }, [filters, fromDate]);
-
-  // Real React Query integration
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['live-map-reports', queryParams],
-    queryFn: () => fetchReportList(queryParams),
+  // Fetch GeoJSON map points using canonical incidentKeys.geo
+  const {
+    data: geoData,
+    isLoading: isGeoLoading,
+    isError: isGeoError,
+    error: geoError,
+  } = useQuery({
+    queryKey: incidentKeys.geo(activeBbox || '', geoParams as Record<string, unknown>),
+    queryFn: ({ signal }) => incidentApi.getGeoIncidents(activeBbox, geoParams, signal),
     staleTime: 1000 * 30, // 30 seconds
     refetchOnWindowFocus: false,
   });
 
-  const reports = useMemo(() => data?.data || [], [data]);
-  const totalRecords = data?.pagination?.total_records ?? reports.length;
-  const targetRegion = REGION_BOUNDS[filters.state];
+  const mapPoints = useMemo(() => geoJSONToMapPoints(geoData), [geoData]);
 
-  // Calculate unique coordinate locations
+  // Lazy detail fetch for rich multimedia & description upon marker selection
+  const {
+    data: detailResponse,
+    isLoading: isDetailLoading,
+  } = useQuery({
+    queryKey: incidentKeys.detail(selectedPoint?.id || ''),
+    queryFn: ({ signal }) => incidentApi.getIncidentDetail(selectedPoint!.id, signal),
+    enabled: !!selectedPoint?.id,
+    staleTime: 1000 * 60, // 1 minute
+  });
+
+  const selectedReport = useMemo(() => {
+    if (!selectedPoint) return null;
+    if (detailResponse?.data) {
+      return detailResponse.data;
+    }
+    return selectedPoint;
+  }, [selectedPoint, detailResponse]);
+
+  // Calculate unique coordinate locations (4-decimal precision)
   const uniqueLocationsCount = useMemo(() => {
     const set = new Set<string>();
-    for (const r of reports) {
-      if (r.location?.latitude != null && r.location?.longitude != null) {
-        set.add(`${r.location.latitude.toFixed(4)}_${r.location.longitude.toFixed(4)}`);
+    for (const p of mapPoints) {
+      if (p.location?.latitude != null && p.location?.longitude != null) {
+        set.add(`${p.location.latitude.toFixed(4)}_${p.location.longitude.toFixed(4)}`);
       }
     }
     return set.size;
-  }, [reports]);
+  }, [mapPoints]);
 
   // Transparent, truthful status message
   const statusLabel = useMemo(() => {
-    if (isLoading) {
+    if (isGeoLoading) {
       return 'Loading incident reports...';
     }
-    if (isError) {
-      return error instanceof Error ? error.message : 'Failed to retrieve live reports';
+    if (isGeoError) {
+      return geoError instanceof Error ? geoError.message : 'Failed to retrieve live reports';
     }
-    if (totalRecords === 0) {
+    const count = mapPoints.length;
+    if (count === 0) {
       return '0 Incidents in Selected View';
     }
-    if (totalRecords > reports.length) {
-      return `Showing ${reports.length} of ${totalRecords} Incidents (${uniqueLocationsCount} Locations on Map)`;
-    }
-    return `${reports.length} Incident${reports.length > 1 ? 's' : ''} on Map (${uniqueLocationsCount} Location${uniqueLocationsCount > 1 ? 's' : ''})`;
-  }, [isLoading, isError, error, totalRecords, reports.length, uniqueLocationsCount]);
+    return `${count} Incident${count > 1 ? 's' : ''} on Map (${uniqueLocationsCount} Location${uniqueLocationsCount > 1 ? 's' : ''})`;
+  }, [isGeoLoading, isGeoError, geoError, mapPoints.length, uniqueLocationsCount]);
 
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-slate-100 text-slate-900">
@@ -155,13 +152,13 @@ export const LiveMapPage: React.FC = () => {
       <main className="relative flex-1 w-full overflow-hidden">
         {/* Fullscreen Map Layer */}
         <LiveMapContainer
-          reports={reports}
-          selectedReport={selectedReport}
-          onSelectReport={(report) => setSelectedReport(report)}
+          reports={mapPoints}
+          selectedReport={selectedPoint}
+          onSelectReport={(point) => setSelectedPoint(point)}
           targetRegion={targetRegion}
         />
 
-        {/* Floating Top Header & Filter Controls matching Stitch */}
+        {/* Floating Top Header & Filter Controls */}
         <div className="absolute top-4 left-4 z-[900] flex flex-col space-y-3 pointer-events-none max-w-[calc(100vw-2rem)] sm:max-w-xl">
           <div className="pointer-events-auto">
             <MapHeaderCard />
@@ -174,12 +171,12 @@ export const LiveMapPage: React.FC = () => {
         {/* Floating Data Status Banner */}
         <div className="absolute top-4 right-4 z-[900] hidden lg:block pointer-events-auto">
           <div className="flex items-center space-x-2 rounded-xl border border-slate-200/80 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-md backdrop-blur-md">
-            {isLoading ? (
+            {isGeoLoading ? (
               <>
                 <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
                 <span>{statusLabel}</span>
               </>
-            ) : isError ? (
+            ) : isGeoError ? (
               <>
                 <AlertTriangle className="h-4 w-4 text-rose-600" />
                 <span className="text-rose-700">{statusLabel}</span>
@@ -203,7 +200,8 @@ export const LiveMapPage: React.FC = () => {
           <div className="absolute bottom-16 sm:bottom-6 right-4 sm:right-6 z-[1000] pointer-events-auto max-w-[calc(100vw-2rem)] sm:max-w-md">
             <SelectedIncidentCard
               report={selectedReport}
-              onClose={() => setSelectedReport(null)}
+              isLoadingDetail={isDetailLoading}
+              onClose={() => setSelectedPoint(null)}
             />
           </div>
         )}

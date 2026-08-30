@@ -13,7 +13,9 @@ export interface GeoJSONIncidentProperties {
   severity: string;
   verification_status: string;
   credibility_score: number | null;
+  readiness?: string | null;
   occurred_at: string | null;
+  location_name?: string | null;
 }
 
 export interface GeoJSONIncidentFeature {
