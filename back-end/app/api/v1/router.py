@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.api.v1.analytics import router as analytics_router
+from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.geo import router as geo_router
 from app.api.v1.health import router as health_router
 from app.api.v1.incidents import router as incidents_router
@@ -15,3 +17,5 @@ api_v1_router.include_router(reports_router, prefix="/reports", tags=["Reports"]
 api_v1_router.include_router(reports_router, prefix="/admin/reports", tags=["Admin Reports"])
 api_v1_router.include_router(verification_router, prefix="/verification", tags=["Verification"])
 api_v1_router.include_router(geo_router, prefix="/geo", tags=["Geospatial"])
+api_v1_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
+api_v1_router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])

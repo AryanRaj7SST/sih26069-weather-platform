@@ -1,3 +1,14 @@
+from app.schemas.analytics import (
+    AnalyticsTrendBucket,
+    AnalyticsTrendData,
+    AnalyticsTrendResponse,
+    CategoryDistributionItem,
+    DashboardSummaryData,
+    DashboardSummaryResponse,
+    DiurnalDistributionItem,
+    SeverityBreakdown,
+    VerificationBreakdown,
+)
 from app.schemas.credibility import (
     IncidentCredibilityData,
     IncidentCredibilityResponse,
@@ -61,9 +72,16 @@ from app.schemas.report import (
 )
 
 __all__ = [
+    "AnalyticsTrendBucket",
+    "AnalyticsTrendData",
+    "AnalyticsTrendResponse",
     "CategoryDetail",
+    "CategoryDistributionItem",
     "CitizenReportCreate",
     "ClusterMemberSummary",
+    "DashboardSummaryData",
+    "DashboardSummaryResponse",
+    "DiurnalDistributionItem",
     "GeoJSONFeatureCollection",
     "GeoJSONIncidentFeature",
     "GeoJSONIncidentProperties",
@@ -101,9 +119,11 @@ __all__ = [
     "ReportSubmitData",
     "ReportSubmitResponse",
     "ReportVerifyRequest",
+    "SeverityBreakdown",
     "SeverityType",
     "SpatialClusterListResponse",
     "SpatialClusterSummary",
     "StageStatusSummary",
+    "VerificationBreakdown",
     "VerificationEventDetail",
 ]

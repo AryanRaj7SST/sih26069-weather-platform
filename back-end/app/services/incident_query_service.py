@@ -9,11 +9,11 @@ from __future__ import annotations
 import math
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from geoalchemy2.functions import ST_MakeEnvelope
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +26,15 @@ from app.models.observation import WeatherObservation
 from app.models.report import WeatherReport
 from app.orchestration.events import OverallReadiness
 from app.orchestration.state import load_orchestration_state
+from app.schemas.analytics import (
+    AnalyticsTrendBucket,
+    AnalyticsTrendData,
+    CategoryDistributionItem,
+    DashboardSummaryData,
+    DiurnalDistributionItem,
+    SeverityBreakdown,
+    VerificationBreakdown,
+)
 from app.schemas.credibility import IncidentCredibilityData
 from app.schemas.duplicate import ClusterMemberSummary, IncidentClusterDetailData
 from app.schemas.evidence import IncidentEvidenceItemData
@@ -942,6 +951,435 @@ class IncidentQueryService:
             )
 
         return GeoJSONFeatureCollection(features=features)
+
+    def _parse_time_range(
+        self,
+        time_range: Optional[str],
+        from_date: Optional[datetime],
+    ) -> Optional[datetime]:
+        """Resolve a temporal lower bound from explicit from_date or named time_range."""
+        if from_date is not None:
+            return from_date
+        if not time_range:
+            return None
+        tr = time_range.strip().lower()
+        now = datetime.now(timezone.utc)
+        if tr == "24h":
+            return now - timedelta(hours=24)
+        if tr == "48h":
+            return now - timedelta(hours=48)
+        if tr == "7d":
+            return now - timedelta(days=7)
+        if tr == "30d":
+            return now - timedelta(days=30)
+        return None
+
+    def _build_aggregation_filters(
+        self,
+        category: Optional[str] = None,
+        severity: Optional[str] = None,
+        verification_status: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+    ) -> List[Any]:
+        """Build shared parameterized SQL filter clauses for aggregations."""
+        filters: List[Any] = []
+
+        if category and category.strip().upper() != "ALL":
+            clean_cat = category.strip().upper()
+            filters.append(
+                (WeatherReport.reported_category == clean_cat)
+                | (
+                    WeatherReport.category_id.in_(
+                        select(EventCategory.id).where(EventCategory.category_code == clean_cat)
+                    )
+                )
+            )
+
+        if severity and severity.strip().upper() != "ALL":
+            filters.append(WeatherReport.severity == severity.strip().upper())
+
+        if verification_status and verification_status.strip().upper() != "ALL":
+            statuses = [s.strip().upper() for s in verification_status.split(",") if s.strip()]
+            if statuses:
+                filters.append(WeatherReport.verification_status.in_(statuses))
+
+        if from_date is not None:
+            filters.append(WeatherReport.occurred_at >= from_date)
+
+        if to_date is not None:
+            filters.append(WeatherReport.occurred_at <= to_date)
+
+        if bbox:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            envelope = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+            filters.append(func.ST_Intersects(WeatherReport.geom, envelope))
+
+        return filters
+
+    async def get_dashboard_summary(
+        self,
+        session: AsyncSession,
+        time_range: Optional[str] = "24h",
+        category: Optional[str] = None,
+        severity: Optional[str] = None,
+        verification_status: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+    ) -> DashboardSummaryData:
+        """Compute high-efficiency SQL summary metrics for Dashboard and Analytics."""
+        effective_from = self._parse_time_range(time_range, from_date)
+        where_filters = self._build_aggregation_filters(
+            category=category,
+            severity=severity,
+            verification_status=verification_status,
+            from_date=effective_from,
+            to_date=to_date,
+            bbox=bbox,
+        )
+
+        twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+
+        # 1. Main summary metrics in single query
+        summary_stmt = select(
+            func.count(WeatherReport.id).label("total_count"),
+            func.count(case((WeatherReport.occurred_at >= twenty_four_hours_ago, 1))).label(
+                "count_24h"
+            ),
+            func.count(case((WeatherReport.verification_status == "VERIFIED", 1))).label(
+                "verified_count"
+            ),
+            func.count(
+                case((WeatherReport.verification_status.in_(["PENDING", "UNDER_REVIEW"]), 1))
+            ).label("pending_count"),
+            func.count(case((WeatherReport.verification_status == "UNDER_REVIEW", 1))).label(
+                "under_review_count"
+            ),
+            func.count(case((WeatherReport.verification_status == "REJECTED", 1))).label(
+                "rejected_count"
+            ),
+            func.count(case((WeatherReport.verification_status == "DUPLICATE", 1))).label(
+                "duplicate_count"
+            ),
+            func.count(case((WeatherReport.severity.in_(["SEVERE", "HIGH"]), 1))).label(
+                "severe_high_count"
+            ),
+            func.count(case((WeatherReport.severity == "SEVERE", 1))).label("severe_count"),
+            func.count(case((WeatherReport.severity == "HIGH", 1))).label("high_count"),
+            func.count(case((WeatherReport.severity == "MODERATE", 1))).label("moderate_count"),
+            func.count(case((WeatherReport.severity == "LOW", 1))).label("low_count"),
+        )
+        if where_filters:
+            summary_stmt = summary_stmt.where(and_(*where_filters))
+
+        res = await session.execute(summary_stmt)
+        row = res.one()
+
+        total_count = int(row.total_count or 0)
+        count_24h = int(row.count_24h or 0)
+        last_24h_pct = round((count_24h / total_count) * 100) if total_count > 0 else 0
+        verified_count = int(row.verified_count or 0)
+        verified_rate = round((verified_count / total_count) * 100) if total_count > 0 else 0
+
+        # 2. Category distribution
+        cat_code_expr = func.coalesce(
+            EventCategory.category_code, WeatherReport.reported_category, "OTHER"
+        )
+        cat_name_expr = func.coalesce(
+            EventCategory.title, WeatherReport.reported_category, "Other Hazard"
+        )
+
+        cat_stmt = select(
+            cat_code_expr.label("code"),
+            cat_name_expr.label("name"),
+            func.count(WeatherReport.id).label("cat_count"),
+        ).outerjoin(EventCategory, WeatherReport.category_id == EventCategory.id)
+        if where_filters:
+            cat_stmt = cat_stmt.where(and_(*where_filters))
+
+        cat_stmt = cat_stmt.group_by(cat_code_expr, cat_name_expr).order_by(
+            func.count(WeatherReport.id).desc()
+        )
+
+        cat_res = await session.execute(cat_stmt)
+        cat_rows = cat_res.all()
+
+        category_items: List[CategoryDistributionItem] = []
+        for c_row in cat_rows:
+            c_count = int(c_row.cat_count or 0)
+            c_pct = round((c_count / total_count) * 100) if total_count > 0 else 0
+            category_items.append(
+                CategoryDistributionItem(
+                    category_code=str(c_row.code),
+                    category_name=str(c_row.name),
+                    count=c_count,
+                    percentage=c_pct,
+                )
+            )
+
+        # 3. 6-hour diurnal distribution (Asia/Kolkata timezone)
+        hour_expr = func.extract("hour", func.timezone("Asia/Kolkata", WeatherReport.occurred_at))
+        diurnal_stmt = select(
+            func.count(case((hour_expr < 6, 1))).label("w0"),
+            func.count(case((and_(hour_expr >= 6, hour_expr < 12), 1))).label("w6"),
+            func.count(case((and_(hour_expr >= 12, hour_expr < 18), 1))).label("w12"),
+            func.count(case((hour_expr >= 18, 1))).label("w18"),
+        )
+        if where_filters:
+            diurnal_stmt = diurnal_stmt.where(and_(*where_filters))
+
+        d_res = await session.execute(diurnal_stmt)
+        d_row = d_res.one()
+
+        diurnal_items = [
+            DiurnalDistributionItem(
+                window="00:00", label="00:00 - 06:00", count=int(d_row.w0 or 0)
+            ),
+            DiurnalDistributionItem(
+                window="06:00", label="06:00 - 12:00", count=int(d_row.w6 or 0)
+            ),
+            DiurnalDistributionItem(
+                window="12:00", label="12:00 - 18:00", count=int(d_row.w12 or 0)
+            ),
+            DiurnalDistributionItem(
+                window="18:00", label="18:00 - 24:00", count=int(d_row.w18 or 0)
+            ),
+        ]
+
+        return DashboardSummaryData(
+            total_count=total_count,
+            period_count=total_count,
+            count_24h=count_24h,
+            last_24h_pct=last_24h_pct,
+            verification=VerificationBreakdown(
+                verified_count=verified_count,
+                verified_rate=verified_rate,
+                pending_count=int(row.pending_count or 0),
+                under_review_count=int(row.under_review_count or 0),
+                rejected_count=int(row.rejected_count or 0),
+                duplicate_count=int(row.duplicate_count or 0),
+            ),
+            severity=SeverityBreakdown(
+                severe_high_count=int(row.severe_high_count or 0),
+                severe_count=int(row.severe_count or 0),
+                high_count=int(row.high_count or 0),
+                moderate_count=int(row.moderate_count or 0),
+                low_count=int(row.low_count or 0),
+            ),
+            category_distribution=category_items,
+            diurnal_distribution=diurnal_items,
+        )
+
+    async def get_analytics_trends(
+        self,
+        session: AsyncSession,
+        time_range: Optional[str] = "7d",
+        interval: Optional[str] = None,
+        category: Optional[str] = None,
+        severity: Optional[str] = None,
+        verification_status: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+    ) -> AnalyticsTrendData:
+        """Compute time-series activity trend buckets for analytics charts."""
+        tr = (time_range or "7d").strip().lower()
+        effective_interval = (interval or ("hour" if tr == "24h" else "day")).strip().lower()
+
+        effective_from = self._parse_time_range(tr, from_date)
+        where_filters = self._build_aggregation_filters(
+            category=category,
+            severity=severity,
+            verification_status=verification_status,
+            from_date=effective_from,
+            to_date=to_date,
+            bbox=bbox,
+        )
+
+        buckets: List[AnalyticsTrendBucket] = []
+
+        if effective_interval == "hour":
+            # 6 4-hour diurnal buckets in Asia/Kolkata operational timezone
+            hour_expr = func.extract(
+                "hour", func.timezone("Asia/Kolkata", WeatherReport.occurred_at)
+            )
+            stmt = select(
+                func.count(case((hour_expr < 4, 1))).label("t0"),
+                func.count(
+                    case(
+                        (
+                            and_(
+                                hour_expr < 4,
+                                WeatherReport.verification_status == "VERIFIED",
+                            ),
+                            1,
+                        )
+                    )
+                ).label("v0"),
+                func.count(case((and_(hour_expr >= 4, hour_expr < 8), 1))).label("t4"),
+                func.count(
+                    case(
+                        (
+                            and_(
+                                hour_expr >= 4,
+                                hour_expr < 8,
+                                WeatherReport.verification_status == "VERIFIED",
+                            ),
+                            1,
+                        )
+                    )
+                ).label("v4"),
+                func.count(case((and_(hour_expr >= 8, hour_expr < 12), 1))).label("t8"),
+                func.count(
+                    case(
+                        (
+                            and_(
+                                hour_expr >= 8,
+                                hour_expr < 12,
+                                WeatherReport.verification_status == "VERIFIED",
+                            ),
+                            1,
+                        )
+                    )
+                ).label("v8"),
+                func.count(case((and_(hour_expr >= 12, hour_expr < 16), 1))).label("t12"),
+                func.count(
+                    case(
+                        (
+                            and_(
+                                hour_expr >= 12,
+                                hour_expr < 16,
+                                WeatherReport.verification_status == "VERIFIED",
+                            ),
+                            1,
+                        )
+                    )
+                ).label("v12"),
+                func.count(case((and_(hour_expr >= 16, hour_expr < 20), 1))).label("t16"),
+                func.count(
+                    case(
+                        (
+                            and_(
+                                hour_expr >= 16,
+                                hour_expr < 20,
+                                WeatherReport.verification_status == "VERIFIED",
+                            ),
+                            1,
+                        )
+                    )
+                ).label("v16"),
+                func.count(case((hour_expr >= 20, 1))).label("t20"),
+                func.count(
+                    case(
+                        (
+                            and_(
+                                hour_expr >= 20,
+                                WeatherReport.verification_status == "VERIFIED",
+                            ),
+                            1,
+                        )
+                    )
+                ).label("v20"),
+            )
+            if where_filters:
+                stmt = stmt.where(and_(*where_filters))
+
+            res = await session.execute(stmt)
+            r = res.one()
+
+            buckets = [
+                AnalyticsTrendBucket(
+                    bucket="00:00",
+                    label="00:00 - 04:00",
+                    total=int(r.t0 or 0),
+                    verified=int(r.v0 or 0),
+                ),
+                AnalyticsTrendBucket(
+                    bucket="04:00",
+                    label="04:00 - 08:00",
+                    total=int(r.t4 or 0),
+                    verified=int(r.v4 or 0),
+                ),
+                AnalyticsTrendBucket(
+                    bucket="08:00",
+                    label="08:00 - 12:00",
+                    total=int(r.t8 or 0),
+                    verified=int(r.v8 or 0),
+                ),
+                AnalyticsTrendBucket(
+                    bucket="12:00",
+                    label="12:00 - 16:00",
+                    total=int(r.t12 or 0),
+                    verified=int(r.v12 or 0),
+                ),
+                AnalyticsTrendBucket(
+                    bucket="16:00",
+                    label="16:00 - 20:00",
+                    total=int(r.t16 or 0),
+                    verified=int(r.v16 or 0),
+                ),
+                AnalyticsTrendBucket(
+                    bucket="20:00",
+                    label="20:00 - 24:00",
+                    total=int(r.t20 or 0),
+                    verified=int(r.v20 or 0),
+                ),
+            ]
+        else:
+            # Daily UTC calendar buckets
+            day_expr = func.date_trunc("day", func.timezone("UTC", WeatherReport.occurred_at))
+            stmt = select(
+                day_expr.label("day_bucket"),
+                func.count(WeatherReport.id).label("total_count"),
+                func.count(case((WeatherReport.verification_status == "VERIFIED", 1))).label(
+                    "verified_count"
+                ),
+            )
+            if where_filters:
+                stmt = stmt.where(and_(*where_filters))
+
+            stmt = stmt.group_by(day_expr).order_by(day_expr.asc())
+
+            res = await session.execute(stmt)
+            rows = res.all()
+
+            db_buckets: Dict[str, Tuple[int, int]] = {}
+            for row in rows:
+                if row.day_bucket is not None:
+                    date_str = row.day_bucket.strftime("%Y-%m-%d")
+                    db_buckets[date_str] = (
+                        int(row.total_count or 0),
+                        int(row.verified_count or 0),
+                    )
+
+            now_utc = datetime.now(timezone.utc)
+            num_days = 7
+            if tr == "30d":
+                num_days = 14
+            elif tr == "7d":
+                num_days = 7
+
+            for i in range(num_days - 1, -1, -1):
+                d = now_utc - timedelta(days=i)
+                d_key = d.strftime("%Y-%m-%d")
+                label = d.strftime("%b %d")
+                t, v = db_buckets.get(d_key, (0, 0))
+                buckets.append(
+                    AnalyticsTrendBucket(
+                        bucket=f"{d_key}T00:00:00Z",
+                        label=label,
+                        total=t,
+                        verified=v,
+                    )
+                )
+
+        return AnalyticsTrendData(
+            time_range=tr,
+            interval=effective_interval,
+            buckets=buckets,
+        )
 
 
 incident_query_service = IncidentQueryService()

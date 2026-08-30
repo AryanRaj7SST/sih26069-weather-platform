@@ -30,3 +30,16 @@ export const incidentKeys = {
   verificationQueues: () => ['verification-queue'] as const,
   verificationQueueList: (params?: Record<string, unknown>) => [...incidentKeys.verificationQueues(), normalizeParams(params)] as const,
 };
+
+export const dashboardKeys = {
+  all: ['dashboard'] as const,
+  summaries: () => [...dashboardKeys.all, 'summary'] as const,
+  summary: (params?: Record<string, unknown>) => [...dashboardKeys.summaries(), normalizeParams(params)] as const,
+};
+
+export const analyticsKeys = {
+  all: ['analytics'] as const,
+  trendsAll: () => [...analyticsKeys.all, 'trends'] as const,
+  trends: (params?: Record<string, unknown>) => [...analyticsKeys.trendsAll(), normalizeParams(params)] as const,
+};
+
