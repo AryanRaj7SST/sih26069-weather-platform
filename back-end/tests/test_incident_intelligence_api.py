@@ -864,8 +864,8 @@ async def test_frontend_report_api_backward_compatibility(
     assert res_detail.status_code == 200
     assert res_detail.json()["data"]["tracking_id"] == f"RPT-BC-{uid}"
 
-    # GET /api/v1/reports/{id}/credibility
-    res_cred = await api_client.get(f"/api/v1/reports/{report.id}/credibility")
+    # GET /api/v1/incidents/{id}/credibility
+    res_cred = await api_client.get(f"/api/v1/incidents/{report.id}/credibility")
     assert res_cred.status_code == 200
     assert res_cred.json()["data"]["score"] == 0.6500
 

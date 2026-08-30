@@ -306,9 +306,9 @@ async def test_invalid_transition_no_side_effects_on_db(
     initial_events = (await db_session.execute(count_stmt)).scalars().all()
     initial_count = len(initial_events)
 
-    # Attempt illegal transition
+    # Attempt illegal transition via canonical verification route
     res = await api_client.post(
-        f"/api/v1/reports/{report.tracking_id}/verify",
+        f"/api/v1/verification/{report.tracking_id}/verify",
         json={"notes": "Illegal attempt"},
     )
     assert res.status_code == 400

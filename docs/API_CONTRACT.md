@@ -164,7 +164,7 @@
 - **Purpose**: Priority-ranked triage backlog for emergency control room operators.
 
 #### 10. Authorize and Verify Incident
-- **Method & Path**: `POST /api/v1/verification/{id}/verify` (also available via `POST /api/v1/incidents/{id}/verify`)
+- **Method & Path**: `POST /api/v1/verification/{id}/verify`
 - **Request Body**:
   ```json
   {

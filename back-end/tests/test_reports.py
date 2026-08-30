@@ -597,15 +597,14 @@ async def test_verify_report_action_success():
         assert create_res.status_code == 201
         tracking_id = create_res.json()["data"]["tracking_id"]
 
-        # Verify the report
+        # Verify the report via canonical verification route
         verify_res = await client.post(
-            f"/api/v1/reports/{tracking_id}/verify",
+            f"/api/v1/verification/{tracking_id}/verify",
             json={"notes": "Confirmed by Ward Officer", "broadcast_alert": True},
         )
         assert verify_res.status_code == 200
         verified_data = verify_res.json()["data"]
-        assert verified_data["verification_status"] == "VERIFIED"
-        assert verified_data["processing_status"] == "COMPLETED"
+        assert verified_data["verification"]["status"] == "VERIFIED"
         assert len(verified_data["verification_history"]) >= 1
         assert verified_data["verification_history"][0]["new_status"] == "VERIFIED"
         assert verified_data["verification_history"][0]["notes"] == "Confirmed by Ward Officer"
@@ -614,7 +613,7 @@ async def test_verify_report_action_success():
 
 @pytest.mark.asyncio
 async def test_reject_report_action_success():
-    """Test rejecting a report persists REJECTED status."""
+    """Test rejecting a report persists REJECTED status via canonical verification router."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         create_res = await client.post(
             "/api/v1/reports",
@@ -630,13 +629,12 @@ async def test_reject_report_action_success():
         tracking_id = create_res.json()["data"]["tracking_id"]
 
         reject_res = await client.post(
-            f"/api/v1/admin/reports/{tracking_id}/reject",
+            f"/api/v1/verification/{tracking_id}/reject",
             json={"rejection_reason": "INACCURATE_LOCATION", "notes": "No hail observed"},
         )
         assert reject_res.status_code == 200
         rejected_data = reject_res.json()["data"]
-        assert rejected_data["verification_status"] == "REJECTED"
-        assert rejected_data["processing_status"] == "CLOSED"
+        assert rejected_data["verification"]["status"] == "REJECTED"
         assert len(rejected_data["verification_history"]) >= 1
         assert rejected_data["verification_history"][0]["new_status"] == "REJECTED"
         assert rejected_data["verification_history"][0]["notes"] == "No hail observed"
@@ -644,7 +642,7 @@ async def test_reject_report_action_success():
 
 @pytest.mark.asyncio
 async def test_mark_duplicate_and_review_actions():
-    """Test marking report under review and duplicate."""
+    """Test marking report under review and duplicate via canonical verification router."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         create_res = await client.post(
             "/api/v1/reports",
@@ -661,18 +659,58 @@ async def test_mark_duplicate_and_review_actions():
 
         # Place under review
         review_res = await client.post(
-            f"/api/v1/reports/{tracking_id}/review",
+            f"/api/v1/verification/{tracking_id}/review",
             json={"notes": "Checking with local AWS"},
         )
         assert review_res.status_code == 200
-        assert review_res.json()["data"]["verification_status"] == "UNDER_REVIEW"
+        assert review_res.json()["data"]["verification"]["status"] == "UNDER_REVIEW"
 
         # Mark duplicate
         dup_res = await client.post(
-            f"/api/v1/reports/{tracking_id}/mark-duplicate",
+            f"/api/v1/verification/{tracking_id}/mark-duplicate",
             json={"primary_report_id": "RPT-PRIMARY-01", "notes": "Merged into primary incident"},
         )
         assert dup_res.status_code == 200
-        assert dup_res.json()["data"]["verification_status"] == "DUPLICATE"
-        assert dup_res.json()["data"]["processing_status"] == "CLOSED"
+        assert dup_res.json()["data"]["verification"]["status"] == "DUPLICATE"
         assert len(dup_res.json()["data"]["verification_history"]) >= 2
+
+
+@pytest.mark.asyncio
+async def test_legacy_triage_routes_and_admin_reports_absent():
+    """Verify removed legacy triage endpoints and /admin/reports are unregistered (404/405)."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_res = await client.post(
+            "/api/v1/reports",
+            data={
+                "latitude": "19.0760",
+                "longitude": "72.8777",
+                "category_code": "FLOOD_WATERLOGGING",
+                "severity": "MODERATE",
+                "title": "Legacy Route Absence Verification",
+            },
+        )
+        assert create_res.status_code == 201
+        tracking_id = create_res.json()["data"]["tracking_id"]
+
+        # 1. Legacy mutation routes on /reports/{id} must not exist
+        res_legacy_verify = await client.post(f"/api/v1/reports/{tracking_id}/verify")
+        assert res_legacy_verify.status_code in (404, 405)
+
+        res_legacy_reject = await client.post(f"/api/v1/reports/{tracking_id}/reject")
+        assert res_legacy_reject.status_code in (404, 405)
+
+        res_legacy_dup = await client.post(f"/api/v1/reports/{tracking_id}/duplicate")
+        assert res_legacy_dup.status_code in (404, 405)
+
+        res_legacy_review = await client.post(f"/api/v1/reports/{tracking_id}/review")
+        assert res_legacy_review.status_code in (404, 405)
+
+        # 2. Duplicate /admin/reports router mount must not exist
+        res_admin_list = await client.get("/api/v1/admin/reports")
+        assert res_admin_list.status_code == 404
+
+        res_admin_intake = await client.post("/api/v1/admin/reports")
+        assert res_admin_intake.status_code == 404
+
+        res_admin_verify = await client.post(f"/api/v1/admin/reports/{tracking_id}/verify")
+        assert res_admin_verify.status_code == 404
