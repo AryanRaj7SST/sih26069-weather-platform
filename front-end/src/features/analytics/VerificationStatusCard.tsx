@@ -1,16 +1,29 @@
 import React, { useMemo } from 'react';
-import { ReportDetailData } from '@/types';
+import { ReportDetailData, VerificationBreakdown } from '@/types';
 
 interface VerificationStatusCardProps {
-  reports: ReportDetailData[];
+  verification?: VerificationBreakdown;
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
 export const VerificationStatusCard: React.FC<VerificationStatusCardProps> = ({
-  reports,
+  verification,
+  reports = [],
   isLoading,
 }) => {
   const statusStats = useMemo(() => {
+    if (verification) {
+      const strictPending = Math.max(0, verification.pending_count - verification.under_review_count);
+      return [
+        { label: 'Verified', count: verification.verified_count, countClass: 'text-blue-600 font-extrabold' },
+        { label: 'Pending', count: strictPending, countClass: 'text-slate-700 font-bold' },
+        { label: 'Under Review', count: verification.under_review_count, countClass: 'text-slate-700 font-bold' },
+        { label: 'Rejected', count: verification.rejected_count, countClass: 'text-rose-600 font-bold' },
+        { label: 'Duplicate', count: verification.duplicate_count, countClass: 'text-purple-600 font-bold' },
+      ];
+    }
+
     let verified = 0;
     let pending = 0;
     let underReview = 0;
@@ -33,7 +46,7 @@ export const VerificationStatusCard: React.FC<VerificationStatusCardProps> = ({
       { label: 'Rejected', count: rejected, countClass: 'text-rose-600 font-bold' },
       { label: 'Duplicate', count: duplicate, countClass: 'text-purple-600 font-bold' },
     ];
-  }, [reports]);
+  }, [verification, reports]);
 
   if (isLoading) {
     return (

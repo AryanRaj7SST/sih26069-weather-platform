@@ -1,16 +1,27 @@
 import React, { useMemo } from 'react';
-import { ReportDetailData } from '@/types';
+import { CategoryDistributionItem, ReportDetailData } from '@/types';
 
 interface EventDistributionCardProps {
-  reports: ReportDetailData[];
+  distribution?: CategoryDistributionItem[];
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
 export const EventDistributionCard: React.FC<EventDistributionCardProps> = ({
-  reports,
+  distribution,
+  reports = [],
   isLoading,
 }) => {
   const categoryStats = useMemo(() => {
+    if (distribution && distribution.length > 0) {
+      return distribution.slice(0, 6).map((item) => ({
+        label: item.category_name,
+        count: item.count,
+      }));
+    }
+
+    if (reports.length === 0) return [];
+
     const counts: Record<string, { label: string; count: number }> = {};
 
     for (const r of reports) {
@@ -26,7 +37,7 @@ export const EventDistributionCard: React.FC<EventDistributionCardProps> = ({
     return Object.values(counts)
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [reports]);
+  }, [distribution, reports]);
 
   const maxCount = categoryStats.length > 0 ? categoryStats[0].count : 1;
 

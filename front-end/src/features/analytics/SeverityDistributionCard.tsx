@@ -1,16 +1,27 @@
 import React, { useMemo } from 'react';
-import { ReportDetailData } from '@/types';
+import { ReportDetailData, SeverityBreakdown } from '@/types';
 
 interface SeverityDistributionCardProps {
-  reports: ReportDetailData[];
+  severity?: SeverityBreakdown;
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
 export const SeverityDistributionCard: React.FC<SeverityDistributionCardProps> = ({
-  reports,
+  severity,
+  reports = [],
   isLoading,
 }) => {
   const severityStats = useMemo(() => {
+    if (severity) {
+      return [
+        { label: 'Severe', count: severity.severe_count, color: 'bg-red-600', textClass: 'text-red-700' },
+        { label: 'High', count: severity.high_count, color: 'bg-amber-600', textClass: 'text-amber-700' },
+        { label: 'Moderate', count: severity.moderate_count, color: 'bg-teal-600', textClass: 'text-teal-700' },
+        { label: 'Low', count: severity.low_count, color: 'bg-slate-600', textClass: 'text-slate-700' },
+      ];
+    }
+
     let severe = 0;
     let high = 0;
     let moderate = 0;
@@ -30,7 +41,7 @@ export const SeverityDistributionCard: React.FC<SeverityDistributionCardProps> =
       { label: 'Moderate', count: moderate, color: 'bg-teal-600', textClass: 'text-teal-700' },
       { label: 'Low', count: low, color: 'bg-slate-600', textClass: 'text-slate-700' },
     ];
-  }, [reports]);
+  }, [severity, reports]);
 
   const maxCount = Math.max(1, ...severityStats.map((s) => s.count));
 

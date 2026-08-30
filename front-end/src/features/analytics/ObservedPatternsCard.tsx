@@ -1,17 +1,53 @@
 import React, { useMemo } from 'react';
 import { Info, CheckCircle2, TrendingUp } from 'lucide-react';
-import { ReportDetailData } from '@/types';
+import { DashboardSummaryData, ReportDetailData } from '@/types';
 
 interface ObservedPatternsCardProps {
-  reports: ReportDetailData[];
+  summary?: DashboardSummaryData;
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
 export const ObservedPatternsCard: React.FC<ObservedPatternsCardProps> = ({
-  reports,
+  summary,
+  reports = [],
   isLoading,
 }) => {
   const observations = useMemo(() => {
+    // 1. Authoritative summary data derivation
+    if (summary) {
+      if (summary.total_count === 0) return [];
+
+      const items: string[] = [];
+
+      // 1. Top Hazard Observation
+      const topCategory = summary.category_distribution[0];
+      if (topCategory && topCategory.count > 0) {
+        items.push(
+          `${topCategory.category_name} reports constitute the highest activity volume (${topCategory.count} reports, ${topCategory.percentage}% of total) in the selected period.`
+        );
+      }
+
+      // 2. Severe / Critical Urgency Observation
+      const severeHighCount = summary.severity.severe_high_count;
+      if (severeHighCount > 0) {
+        const severePct = Math.round((severeHighCount / summary.total_count) * 100);
+        items.push(
+          `${severeHighCount} reports (${severePct}%) are classified as High or Severe urgency requiring prioritized operator monitoring.`
+        );
+      }
+
+      // 3. Verification Ratio Observation
+      const verifiedCount = summary.verification.verified_count;
+      const verifiedPct = summary.verification.verified_rate;
+      items.push(
+        `Verified report rate is currently at ${verifiedPct}% (${verifiedCount} verified reports) across active submissions.`
+      );
+
+      return items;
+    }
+
+    // 2. Legacy fallback
     if (reports.length === 0) return [];
 
     const items: string[] = [];
@@ -49,7 +85,7 @@ export const ObservedPatternsCard: React.FC<ObservedPatternsCardProps> = ({
     );
 
     return items;
-  }, [reports]);
+  }, [summary, reports]);
 
   if (isLoading) {
     return (

@@ -101,7 +101,7 @@ async def test_dashboard_summary_api_success_and_filters(
     assert len(data["diurnal_distribution"]) == 4
 
     # 2. Explicit time_range variations
-    for tr in ["24h", "48h", "7d", "all"]:
+    for tr in ["24h", "48h", "7d", "30d", "all"]:
         r_tr = await api_client.get(f"/api/v1/dashboard/summary?time_range={tr}")
         assert r_tr.status_code == 200
 

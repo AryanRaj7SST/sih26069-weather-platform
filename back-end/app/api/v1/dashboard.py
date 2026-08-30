@@ -91,7 +91,7 @@ def _parse_bbox(bbox_str: Optional[str]) -> Optional[Tuple[float, float, float, 
     ),
 )
 async def get_dashboard_summary(
-    time_range: Optional[str] = Query("24h", description="Time range: 24h, 48h, 7d, all"),
+    time_range: Optional[str] = Query("24h", description="Time range: 24h, 48h, 7d, 30d, all"),
     category: Optional[str] = Query(None, description="Event category code"),
     severity: Optional[str] = Query(None, description="Severity: LOW, MODERATE, HIGH, SEVERE, ALL"),
     status_filter: Optional[str] = Query(
@@ -103,13 +103,13 @@ async def get_dashboard_summary(
     db: AsyncSession = Depends(get_db),
 ) -> DashboardSummaryResponse:
     """Retrieve SQL-aggregated summary metrics for dashboard situational awareness."""
-    if time_range and time_range.strip().lower() not in ("24h", "48h", "7d", "all"):
+    if time_range and time_range.strip().lower() not in ("24h", "48h", "7d", "30d", "all"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "VALIDATION_ERROR",
                 "message": (
-                    f"Invalid time_range '{time_range}'. Allowed values: 24h, 48h, 7d, all."
+                    f"Invalid time_range '{time_range}'. Allowed values: 24h, 48h, 7d, 30d, all."
                 ),
             },
         )

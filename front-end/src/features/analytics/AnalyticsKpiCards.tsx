@@ -1,20 +1,40 @@
 import React, { useMemo } from 'react';
-import { ReportDetailData, PaginationMeta } from '@/types';
+import { DashboardSummaryData, PaginationMeta, ReportDetailData } from '@/types';
 
 interface AnalyticsKpiCardsProps {
-  reports: ReportDetailData[];
+  summary?: DashboardSummaryData;
+  reports?: ReportDetailData[];
   pagination?: PaginationMeta;
   timeRange: string;
   isLoading: boolean;
 }
 
 export const AnalyticsKpiCards: React.FC<AnalyticsKpiCardsProps> = ({
-  reports,
+  summary,
+  reports = [],
   pagination,
   timeRange,
   isLoading,
 }) => {
   const stats = useMemo(() => {
+    const periodLabelMap: Record<string, string> = {
+      '24h': '24 Hours',
+      '7d': '7 Days',
+      '30d': '30 Days',
+      all: 'All Time',
+    };
+
+    if (summary) {
+      return {
+        totalCount: summary.total_count,
+        periodReports: summary.period_count,
+        verifiedCount: summary.verification.verified_count,
+        verifiedPct: summary.verification.verified_rate,
+        pendingCount: summary.verification.pending_count,
+        periodLabel: periodLabelMap[timeRange] || 'Selected Period',
+      };
+    }
+
     const totalCount = pagination?.total_records ?? reports.length;
     let verifiedCount = 0;
     let pendingCount = 0;
@@ -29,13 +49,6 @@ export const AnalyticsKpiCards: React.FC<AnalyticsKpiCardsProps> = ({
 
     const verifiedPct = reports.length > 0 ? Math.round((verifiedCount / reports.length) * 100) : 0;
 
-    const periodLabelMap: Record<string, string> = {
-      '24h': '24 Hours',
-      '7d': '7 Days',
-      '30d': '30 Days',
-      all: 'All Time',
-    };
-
     return {
       totalCount,
       periodReports: reports.length,
@@ -44,7 +57,7 @@ export const AnalyticsKpiCards: React.FC<AnalyticsKpiCardsProps> = ({
       pendingCount,
       periodLabel: periodLabelMap[timeRange] || 'Selected Period',
     };
-  }, [reports, pagination, timeRange]);
+  }, [summary, reports, pagination, timeRange]);
 
   if (isLoading) {
     return (

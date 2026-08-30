@@ -16,10 +16,15 @@ import {
   ObservedPatternsCard,
   GEOGRAPHY_OPTIONS,
 } from '@/features/analytics';
+import { dashboardApi } from '@/services/dashboardApi';
 import { analyticsApi } from '@/services/analyticsApi';
 import { fetchAllDashboardReports } from '@/services/reportApi';
-import { analyticsKeys } from '@/lib/queryKeys';
-import { AnalyticsTrendQueryParams, ReportListQueryParams } from '@/types';
+import { dashboardKeys, analyticsKeys } from '@/lib/queryKeys';
+import {
+  AnalyticsTrendQueryParams,
+  DashboardSummaryQueryParams,
+  ReportListQueryParams,
+} from '@/types';
 import { BarChart3, Filter, AlertCircle } from 'lucide-react';
 
 export const AnalyticsPage: React.FC = () => {
@@ -33,6 +38,43 @@ export const AnalyticsPage: React.FC = () => {
 
   const [tempFilters, setTempFilters] = useState<AnalyticsFilterState>(filters);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+
+  // Compute server-aggregated summary parameters
+  const summaryParams = useMemo<DashboardSummaryQueryParams>(() => {
+    const params: DashboardSummaryQueryParams = {};
+
+    if (filters.timeRange) {
+      params.time_range = filters.timeRange;
+    }
+    if (filters.category !== 'ALL') {
+      params.category = filters.category;
+    }
+    if (filters.severity !== 'ALL') {
+      params.severity = filters.severity;
+    }
+    if (filters.status !== 'ALL') {
+      params.status = filters.status;
+    }
+    if (filters.region !== 'ALL' && GEOGRAPHY_OPTIONS[filters.region]?.bbox) {
+      params.bbox = GEOGRAPHY_OPTIONS[filters.region].bbox;
+    }
+
+    return params;
+  }, [filters]);
+
+  // Fetch server-side summary statistics via dashboardApi
+  const {
+    data: summaryResponse,
+    isLoading: isSummaryLoading,
+    isError: isSummaryError,
+    error: summaryError,
+  } = useQuery({
+    queryKey: dashboardKeys.summary(summaryParams as Record<string, unknown>),
+    queryFn: ({ signal }) => dashboardApi.getSummary(summaryParams, signal),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  const summaryData = summaryResponse?.data;
 
   // Compute server-aggregated trend parameters
   const trendParams = useMemo<AnalyticsTrendQueryParams>(() => {
@@ -71,7 +113,7 @@ export const AnalyticsPage: React.FC = () => {
 
   const trendData = trendResponse?.data;
 
-  // Compute API query params for raw report consumers (KPIs, tables, non-trend cards)
+  // Compute API query params for raw report consumers (RecentReportsTable, RegionalActivityCard)
   const queryParams = useMemo<ReportListQueryParams>(() => {
     const params: ReportListQueryParams = {};
 
@@ -108,7 +150,7 @@ export const AnalyticsPage: React.FC = () => {
     return params;
   }, [filters]);
 
-  // Fetch raw reports for non-trend components
+  // Fetch raw reports for non-aggregated components
   const {
     data: response,
     isLoading: isRawLoading,
@@ -142,8 +184,8 @@ export const AnalyticsPage: React.FC = () => {
     setMobileFilterOpen(false);
   };
 
-  const isAnyError = isRawError || isTrendError;
-  const activeError = rawError || trendError;
+  const isAnyError = isRawError || isTrendError || isSummaryError;
+  const activeError = summaryError || trendError || rawError;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
@@ -202,15 +244,16 @@ export const AnalyticsPage: React.FC = () => {
             />
           </div>
 
-          {/* 1. KPI Cards */}
+          {/* 1. KPI Cards (Migrated to dashboardApi.getSummary) */}
           <AnalyticsKpiCards
+            summary={summaryData}
             reports={reports}
             pagination={pagination}
             timeRange={filters.timeRange}
-            isLoading={isRawLoading}
+            isLoading={isSummaryLoading}
           />
 
-          {/* 2. Main Activity Chart (Migrated to server-side analyticsApi.getTrends) */}
+          {/* 2. Main Activity Chart (Migrated to analyticsApi.getTrends) */}
           <ReportActivityChart
             trendData={trendData}
             reports={reports}
@@ -218,19 +261,21 @@ export const AnalyticsPage: React.FC = () => {
             isLoading={isTrendLoading}
           />
 
-          {/* 3. 2-Column Grid: Event & Severity Distribution */}
+          {/* 3. 2-Column Grid: Event & Severity Distribution (Migrated to dashboardApi.getSummary) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <EventDistributionCard
+              distribution={summaryData?.category_distribution}
               reports={reports}
-              isLoading={isRawLoading}
+              isLoading={isSummaryLoading}
             />
             <SeverityDistributionCard
+              severity={summaryData?.severity}
               reports={reports}
-              isLoading={isRawLoading}
+              isLoading={isSummaryLoading}
             />
           </div>
 
-          {/* 4. Recent Reports Table */}
+          {/* 4. Recent Reports Table (Raw data consumer) */}
           <RecentReportsTable
             reports={reports}
             isLoading={isRawLoading}
@@ -239,8 +284,9 @@ export const AnalyticsPage: React.FC = () => {
           {/* 5. 2-Column Grid: Verification Status & Regional Activity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <VerificationStatusCard
+              verification={summaryData?.verification}
               reports={reports}
-              isLoading={isRawLoading}
+              isLoading={isSummaryLoading}
             />
             <RegionalActivityCard
               reports={reports}
@@ -248,10 +294,11 @@ export const AnalyticsPage: React.FC = () => {
             />
           </div>
 
-          {/* 6. Observed Patterns Banner */}
+          {/* 6. Observed Patterns Banner (Migrated to dashboardApi.getSummary) */}
           <ObservedPatternsCard
+            summary={summaryData}
             reports={reports}
-            isLoading={isRawLoading}
+            isLoading={isSummaryLoading}
           />
         </div>
       </main>
