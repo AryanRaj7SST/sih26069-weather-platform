@@ -1,139 +1,117 @@
-# External Services, Credentials & Environment Setup
+# External Services, Credentials & Configuration Guide
 
-**Platform**: National Weather Big Data Analytics Platform (`SIH26069`)  
-**Purpose**: Comprehensive guide separating automated local environments from manual human developer configurations and cloud provisioning.
-
-> [!NOTE]
-> **No manual external setup is required during this initialization phase.**
-> The local MVP is engineered to run completely offline using local containers (PostgreSQL+PostGIS, Redis, MinIO) and local embeddings (FastEmbed). This document serves as the formal operational runbook for when external cloud services and live government APIs are introduced in later phases.
+**Platform**: National Weather Big Data Analytics Platform (`SIH26069`)
+**Status**: **FROZEN FOR SIH/MVP SCOPE**
 
 ---
 
-## 1. Automated Local Setup vs. Manual Human Actions
+## 1. Automated Local Setup vs. Production Cloud Actions
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                 AUTOMATED VIA LOCAL SCRIPTS                 │
-│  - Local PostgreSQL 16 + PostGIS initialization             │
-│  - Local Redis 7 container configuration                    │
-│  - Local MinIO S3-compatible storage setup & bucket creation│
-│  - Local text embedding models download (FastEmbed)         │
-│  - Database migrations execution (Alembic)                  │
-│  - Seed & demo data generation                              │
+│                 AUTOMATED LOCAL MVP SERVICES                │
+│  - Local PostgreSQL 16 + PostGIS (Port 5432)                │
+│  - Local Redis 7 Container (Port 6379)                      │
+│  - Local MinIO S3 Object Storage (Ports 9000/9001)          │
+│  - Local Alembic Migrations (0001 -> 0004)                  │
+│  - Seed Disaster Data & Weather Observations Telemetry      │
 └─────────────────────────────────────────────────────────────┘
                                ▲
                                │ Isolated Boundary
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                MANUAL HUMAN DEVELOPER ACTIONS               │
-│  - Registration for IMD Data Portal / Open City APIs        │
-│  - Provisioning of Data.gov.in API Keys                     │
-│  - Procurement of Cloud Object Storage (AWS S3 / GCP GCS)   │
-│  - Provisioning of Production Managed DB (Neon/RDS/Supabase)│
-│  - Cloud LLM Provider API Keys (OpenAI / Gemini / Anthropic)│
-│  - Production JWT Signing Secret Generation                 │
+│               DEFERRED PRODUCTION CLOUD ACTIONS             │
+│  - Production Managed PostgreSQL with PostGIS (RDS/Neon)    │
+│  - Production Managed Redis (AWS ElastiCache / Upstash)     │
+│  - Production Cloud Storage (AWS S3 with Private IAM Bucket)│
+│  - Production JWT Token Secret & OAuth2 Provider (Keycloak) │
+│  - OpenTelemetry / Prometheus APM Monitoring Exporters      │
+│  - Process Supervision Units (systemd / Kubernetes Pods)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Catalog of Future Manual Actions
+## 2. Authoritative Configuration Reference
 
-### 2.1 Government Open Data & IMD Portal Access
-* **What**: Register an appropriate developer/organization account on [IMD API Portal](https://api.imd.gov.in) and [data.gov.in](https://data.gov.in) and request access to IMD weather telemetry / nowcast datasets.
-* **Why**: To enable live polling of official Automatic Weather Stations (AWS) and Doppler weather radar precipitation feeds.
-* **Where**: IMD API Portal / Government Data Portal web interface.
-* **Credential Produced**: `IMD_API_KEY` / `DATA_GOV_API_KEY` (string tokens).
-* **Where it belongs**: `back-end/.env` $\rightarrow$ `IMD_API_KEY`, `DATA_GOV_API_KEY`.
-* **Security Rule**: **NEVER commit this key to Git.** Always reference via environment variables.
+All application configuration is managed via Pydantic Settings in [app/core/config.py](file:///Users/akshatjain/Documents/SIH/back-end/app/core/config.py) and populated from `.env` or system environment variables.
+
+### 2.1 Database & Storage Settings
+
+| Variable Name | Required | Default Value | Security Sensitivity | Description |
+| :--- | :---: | :--- | :---: | :--- |
+| `DATABASE_URL` | **Yes** | `postgresql+asyncpg://postgres:postgres@localhost:5432/weather_platform` | **Sensitive** | Asynchronous PostgreSQL + PostGIS connection string |
+| `DATABASE_ECHO` | No | `False` | Low | SQLAlchemy SQL query echo debugging flag |
+| `S3_ENDPOINT_URL` | No | `http://localhost:9000` | Low | S3 / MinIO API endpoint URL |
+| `S3_ACCESS_KEY_ID` | No | `minioadmin` | **Sensitive** | S3 / MinIO access key ID |
+| `S3_SECRET_ACCESS_KEY` | No | `minioadmin` | **Sensitive** | S3 / MinIO secret access key |
+| `S3_BUCKET_NAME` | No | `weather-media` | Low | S3 bucket for citizen incident media |
+| `S3_REGION` | No | `us-east-1` | Low | S3 region identifier |
+| `S3_USE_SSL` | No | `False` | Low | Enable HTTPS for S3 communication |
+
+### 2.2 Redis & Real-Time Event Stream Settings
+
+| Variable Name | Required | Default Value | Security Sensitivity | Description |
+| :--- | :---: | :--- | :---: | :--- |
+| `REDIS_URL` | **Yes** | `redis://localhost:6379/0` | **Sensitive** | Redis connection URI for streams and cache |
+| `REALTIME_STREAM_NAME` | No | `stream:weather:realtime` | Low | Redis Stream topic name for realtime events |
+| `REALTIME_STREAM_MAXLEN` | No | `10000` | Low | Maximum approximate entries in Redis Stream |
+
+### 2.3 Outbox Worker Settings
+
+| Variable Name | Required | Default Value | Security Sensitivity | Description |
+| :--- | :---: | :--- | :---: | :--- |
+| `OUTBOX_WORKER_ENABLED` | No | `True` | Low | Enables/disables outbox worker poll loop |
+| `OUTBOX_WORKER_BATCH_SIZE` | No | `50` | Low | Number of outbox rows claimed per batch |
+| `OUTBOX_WORKER_POLL_INTERVAL_SECONDS` | No | `1.0` | Low | Active polling loop frequency / idle sleep (seconds) |
+| `OUTBOX_WORKER_MAX_ATTEMPTS` | No | `5` | Low | Max delivery attempts before moving to `DEAD_LETTER` |
+| `OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS` | No | `3600` | Low | Interval in seconds between historical prune runs |
+| `OUTBOX_WORKER_RETENTION_HOURS` | No | `72` | Low | Retention window in hours before pruning `PUBLISHED` rows |
+
+### 2.4 API, Security & CORS Settings
+
+| Variable Name | Required | Default Value | Security Sensitivity | Description |
+| :--- | :---: | :--- | :---: | :--- |
+| `ENVIRONMENT` | No | `development` | Low | Environment name (`development`, `production`, `testing`) |
+| `DEBUG` | No | `True` | Low | Debugging and verbose logging mode |
+| `API_V1_STR` | No | `/api/v1` | Low | Base route prefix for API endpoints |
+| `PROJECT_NAME` | No | `"National Weather Big Data Analytics Platform"` | Low | Application name |
+| `SECRET_KEY` | No | `"development-secret-key-change-in-production"` | **Sensitive** | Secret key for cryptographic signing |
+| `ALLOWED_ORIGINS` | No | `["http://localhost:5173","http://localhost:3000"]` | Low | Allowed CORS origins for browser clients |
+| `VITE_API_URL` | No | `http://localhost:8000` | Low | Frontend environment variable pointing to API |
 
 ---
 
-### 2.2 Cloud Object Storage Provisioning (AWS S3 / Cloudflare R2)
-* **What**: Create an S3 storage bucket (e.g., `sih26069-weather-media`) with private ACL and configure IAM credentials with read/write access.
-* **Why**: For production deployment where local MinIO is replaced by durable cloud storage.
-* **Where**: AWS Management Console / Cloudflare Dashboard.
-* **Credentials Produced**:
-  - `S3_ENDPOINT_URL`
-  - `S3_ACCESS_KEY_ID`
-  - `S3_SECRET_ACCESS_KEY`
-  - `S3_BUCKET_NAME`
-  - `S3_REGION`
-* **Where it belongs**: `back-end/.env`.
-* **Security Rule**: Never check S3 secret keys into version control. Use least-privilege IAM policies restricted only to the media bucket.
+## 3. Operations Runbook & Troubleshooting
 
----
+### 3.1 Inspecting the Realtime Outbox in PostgreSQL
+```sql
+-- Check counts by status
+SELECT status, COUNT(*) FROM realtime_outbox GROUP BY status;
 
-### 2.3 Cloud LLM / AI API Keys (Optional Ambiguity Resolution)
-* **What**: Obtain an API key from Google AI Studio (Gemini) or Anthropic/OpenAI for natural language incident summarization and multi-lingual translation.
-* **Why**: To generate human-readable crisis summaries for DEOC officers and translate regional Indian languages (Hindi, Marathi, Bengali, Tamil, etc.).
-* **Where**: AI Studio / Cloud Provider Console.
-* **Credential Produced**: `LLM_API_KEY` (e.g., `GEMINI_API_KEY`).
-* **Where it belongs**: `back-end/.env` $\rightarrow$ `LLM_API_KEY`.
-* **Security Rule**: Strict zero-commit policy. Fallback to local deterministic templates if the key is missing.
-
----
-
-### 2.4 Production Database & Managed Redis
-* **What**: Provision a managed PostgreSQL instance with PostGIS enabled (e.g., AWS RDS, Supabase, Neon) and managed Redis (Upstash, AWS ElastiCache).
-* **Why**: High-availability multi-region hosting for production demonstration.
-* **Where**: Cloud provider management console.
-* **Credentials Produced**: `DATABASE_URL` (with PostGIS connection string) and `REDIS_URL`.
-* **Where it belongs**: Production environment secret store / `.env`.
-
----
-
-## 3. Master Environment Variable Reference Template
-
-When setting up `back-end/.env`, use the sanitized schema below (available in `back-end/.env.example` during Phase 1):
-
-```bash
-# ==============================================================================
-# NATIONAL WEATHER BIG DATA ANALYTICS PLATFORM (.env.example)
-# ==============================================================================
-
-# Application Environment
-ENVIRONMENT=development
-DEBUG=true
-API_V1_STR=/api/v1
-PROJECT_NAME="National Weather Big Data Analytics Platform"
-
-# Security & JWT Authentication
-SECRET_KEY=change-this-to-a-secure-random-64-character-hex-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
-
-# Primary Database (PostgreSQL + PostGIS)
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/weather_platform
-DATABASE_ECHO=false
-
-# In-Memory Cache & Message Streams (Redis)
-REDIS_URL=redis://localhost:6379/0
-
-# Object Storage (MinIO local default / S3 production)
-S3_ENDPOINT_URL=http://localhost:9000
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
-S3_BUCKET_NAME=weather-media
-S3_REGION=us-east-1
-S3_USE_SSL=false
-
-# External Meteorological & Government APIs
-DATA_GOV_API_KEY=
-IMD_API_ENDPOINT=https://api.imd.gov.in/api/v1
-IMD_API_KEY=
-NDMA_SACHET_RSS_URL=https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails
-
-# AI & Semantic Intelligence
-EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
-LLM_PROVIDER=none # options: none | gemini | openai
-LLM_API_KEY=
-
-# CORS Configuration
-ALLOWED_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+-- Inspect failed records
+SELECT id, event_id, event_type, attempts, max_attempts, last_error, created_at
+FROM realtime_outbox
+WHERE status = 'DEAD_LETTER'
+ORDER BY created_at DESC;
 ```
 
----
+### 3.2 Inspecting Redis Streams
+```bash
+# Check stream length
+redis-cli XLEN stream:weather:realtime
+
+# Read latest 5 messages
+redis-cli XREVRANGE stream:weather:realtime + - COUNT 5
+```
+
+### 3.3 Database Health & Migration Check
+```bash
+cd back-end
+source .venv/bin/activate
+alembic current
+alembic check
+```
 
 ## 4. Git Security & Secret Prevention Guidelines
 

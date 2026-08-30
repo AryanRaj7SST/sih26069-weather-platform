@@ -99,11 +99,12 @@
 
 ## 5. Development & Testing Tooling
 
-- **Backend**:
-  - Linter & Formatter: `ruff`
-  - Type Checker: `mypy` (strict mode)
-  - Test Suite: `pytest`, `pytest-asyncio`, `pytest-cov`, `httpx` (for `AsyncClient` tests)
-- **Frontend**:
+- **Backend Quality Suite**:
+  - Test Suite: `pytest`, `pytest-asyncio`, `pytest-cov`, `httpx` (AsyncClient)
+  - Type Checkers: `mypy` (strict mode), `pyrefly` (Python 3.14 static diagnostics)
+  - Linter & Formatter: `ruff` (linter and code formatter)
+- **Frontend Quality Suite**:
+  - Test Suite: `vitest` (unit, migration, and contract tests)
   - Linter: `eslint` with `@typescript-eslint`
-  - Formatter: `prettier`
   - Type Checker: `tsc --noEmit`
+  - Bundler: `vite` (optimized Rollup/ESBuild pipeline)

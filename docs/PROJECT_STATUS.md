@@ -64,17 +64,13 @@ Dedicated Outbox Worker (python -m app.workers.run_outbox_worker)
     ↓
 FastAPI SSE Transport (GET /api/v1/events/stream)
     ├── Reads from Redis Stream via XREAD
-    ├── Supports cursor replay via Last-Event-ID / ?last_event_id=
-    └── Emits 'system.resync_required' if client ID has been pruned from stream buffer
+    ├── Supports cursor replay via Last-Event-ID header
+    └── Emits system.resync_required if cursor is trimmed
     ↓
-Frontend RealtimeService (front-end/src/services/realtimeService.ts)
-    ├── Singleton EventSource lifecycle mounted at application root
-    ├── Bounded FIFO Deduplication Queue (1,000 items) based on immutable event_id
-    └── Targeted React Query Invalidation (incidentKeys, dashboardKeys, analyticsKeys)
-    ↓
-Authoritative REST Refetches (GET /summary, /incidents, /queue)
-    ↓
-Live Operator UI Updated Without Page Refresh
+Frontend Realtime Client (realtimeService.ts)
+    ├── Native EventSource connection with auto-reconnect
+    ├── Ring-buffer deduplication (1000 event_ids)
+    └── Targeted React Query cache invalidation (geoAll, summary, trends)
 ```
 
 ### Realtime Verification Milestones:
@@ -97,7 +93,7 @@ Live Operator UI Updated Without Page Refresh
 1. **SSE Security Boundary**: Realtime SSE endpoint (`/api/v1/events/stream`) operates on the open read-oriented API model. Sensitive fields (passwords, auth tokens, phone numbers, operator notes, internal stack traces) are explicitly stripped at the outbox staging boundary.
 2. **Worker Supervision**: The Outbox Worker runs as a dedicated, independent process (`python -m app.workers.run_outbox_worker`). Production supervisor integration (systemd, Supervisord, Kubernetes) remains an operational deployment responsibility.
 3. **Delivery Semantics**: At-least-once stream delivery. Duplicate delivery is possible. The frontend suppresses duplicate deliveries for event IDs retained in its bounded deduplication buffer. The system does not guarantee exactly-once delivery or processing.
-4. **Redis Stream Capacity**: Redis Stream `sih:realtime:events` is capped at approximately 10,000 entries. Clients offline longer than the stream retention window receive `system.resync_required` to reconcile via REST.
+4. **Redis Stream Capacity**: Redis Stream `stream:weather:realtime` is capped at approximately 10,000 entries. Clients offline longer than the stream retention window receive `system.resync_required` to reconcile via REST.
 5. **Outbox Retention**: PostgreSQL `realtime_outbox` retains published events for 72 hours before automated periodic pruning. Dead-letter rows are retained indefinitely.
 6. **500-Feature Map Bound**: GeoJSON map queries enforce a 500-feature server-side limit (`LIMIT 500`) to protect browser memory and rendering performance. Macro totals remain authoritatively computed via server summary endpoints.
 7. **Cloud Observability**: Application uses structured logging; distributed tracing (OpenTelemetry / APM) remains deferred for cloud deployment.
