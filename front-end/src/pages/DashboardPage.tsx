@@ -14,8 +14,14 @@ import { RecentIncidentFeed } from '@/features/dashboard/RecentIncidentFeed';
 import { IncidentTrendCard } from '@/features/dashboard/IncidentTrendCard';
 import { EventDistributionCard } from '@/features/dashboard/EventDistributionCard';
 import { VerificationSummaryCard } from '@/features/dashboard/VerificationSummaryCard';
+import { dashboardApi } from '@/services/dashboardApi';
 import { fetchAllDashboardReports } from '@/services/reportApi';
-import { ReportDetailData, ReportListQueryParams } from '@/types';
+import { dashboardKeys } from '@/lib/queryKeys';
+import {
+  DashboardSummaryQueryParams,
+  ReportDetailData,
+  ReportListQueryParams,
+} from '@/types';
 import { AlertTriangle } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -28,7 +34,42 @@ export const DashboardPage: React.FC = () => {
 
   const [selectedReport, setSelectedReport] = useState<ReportDetailData | null>(null);
 
-  // Compute from_date based on timeRange filter
+  // Summary aggregation query parameters
+  const summaryParams: DashboardSummaryQueryParams = useMemo(() => {
+    const params: DashboardSummaryQueryParams = {};
+    if (filters.timeRange) {
+      params.time_range = filters.timeRange;
+    }
+    if (filters.hazard !== 'ALL') {
+      params.category = filters.hazard;
+    }
+    if (filters.status !== 'ALL') {
+      params.status = filters.status;
+    }
+    const regionInfo = REGIONS[filters.region];
+    if (regionInfo?.bbox) {
+      params.bbox = regionInfo.bbox;
+    }
+    return params;
+  }, [filters]);
+
+  // Fetch SQL-aggregated summary data from backend
+  const {
+    data: summaryResponse,
+    isLoading: isSummaryLoading,
+    isFetching: isSummaryFetching,
+    isError: isSummaryError,
+    error: summaryError,
+    refetch: refetchSummary,
+  } = useQuery({
+    queryKey: dashboardKeys.summary(summaryParams as Record<string, unknown>),
+    queryFn: ({ signal }) => dashboardApi.getSummary(summaryParams, signal),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  const summaryData = summaryResponse?.data;
+
+  // Compute from_date based on timeRange filter for raw incident list (map & feed)
   const fromDate = useMemo(() => {
     const now = Date.now();
     if (filters.timeRange === '24h') {
@@ -43,8 +84,8 @@ export const DashboardPage: React.FC = () => {
     return undefined;
   }, [filters.timeRange]);
 
-  // Construct query parameters matching the real backend GET /api/v1/reports
-  const queryParams: ReportListQueryParams = useMemo(() => {
+  // Query parameters for raw reports (used by Map pins & Recent Incident Feed)
+  const rawQueryParams: ReportListQueryParams = useMemo(() => {
     const params: ReportListQueryParams = {
       page: 1,
       page_size: 100,
@@ -53,16 +94,12 @@ export const DashboardPage: React.FC = () => {
     if (fromDate) {
       params.from_date = fromDate;
     }
-
     if (filters.hazard !== 'ALL') {
       params.category = filters.hazard;
     }
-
     if (filters.status !== 'ALL') {
       params.status = filters.status;
     }
-
-    // Map regional filter to spatial bounding box
     const regionInfo = REGIONS[filters.region];
     if (regionInfo?.bbox) {
       params.bbox = regionInfo.bbox;
@@ -71,27 +108,35 @@ export const DashboardPage: React.FC = () => {
     return params;
   }, [filters, fromDate]);
 
-  // Fetch complete dataset across pages from real backend API using shared TanStack Query hook
+  // Fetch raw dataset for map markers and recent feed
   const {
-    data: response,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch,
+    data: rawResponse,
+    isLoading: isRawLoading,
+    isFetching: isRawFetching,
+    isError: isRawError,
+    error: rawError,
+    refetch: refetchRaw,
   } = useQuery({
-    queryKey: ['dashboard-reports', queryParams],
-    queryFn: () => fetchAllDashboardReports(queryParams),
+    queryKey: ['dashboard-reports', rawQueryParams],
+    queryFn: () => fetchAllDashboardReports(rawQueryParams),
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 
-  const reports = useMemo(() => response?.data || [], [response]);
-  const pagination = response?.pagination;
+  const reports = useMemo(() => rawResponse?.data || [], [rawResponse]);
 
   const targetRegion = useMemo(() => {
     const reg = REGIONS[filters.region];
     return reg ? { center: reg.center, zoom: reg.zoom } : undefined;
   }, [filters.region]);
+
+  const handleRefresh = () => {
+    refetchSummary();
+    refetchRaw();
+  };
+
+  const isFetching = isSummaryFetching || isRawFetching;
+  const isError = isSummaryError || isRawError;
+  const activeError = summaryError || rawError;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50/60 text-slate-900 pb-16 md:pb-0">
@@ -105,7 +150,7 @@ export const DashboardPage: React.FC = () => {
           <DashboardFilters
             filters={filters}
             onChange={setFilters}
-            onRefresh={() => refetch()}
+            onRefresh={handleRefresh}
             isFetching={isFetching}
           />
 
@@ -114,19 +159,20 @@ export const DashboardPage: React.FC = () => {
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center space-x-2">
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
               <span>
-                Failed to load situational dashboard data: {error instanceof Error ? error.message : 'Unknown error'}.
+                Failed to load situational dashboard data:{' '}
+                {activeError instanceof Error ? activeError.message : 'Unknown error'}.
               </span>
             </div>
           )}
 
-          {/* Row 1: KPI Summary Cards */}
+          {/* Row 1: KPI Summary Cards (Server-side Aggregated) */}
           <DashboardKpiCards
+            summary={summaryData}
             reports={reports}
-            pagination={pagination}
-            isLoading={isLoading}
+            isLoading={isSummaryLoading}
           />
 
-          {/* Row 2: Situational Overview Map + Live Incident Feed */}
+          {/* Row 2: Situational Overview Map + Live Incident Feed (Raw Pin/Feed Data) */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Left 8 columns: Situational Map */}
             <div className="lg:col-span-8">
@@ -144,16 +190,29 @@ export const DashboardPage: React.FC = () => {
                 reports={reports}
                 selectedReport={selectedReport}
                 onSelectReport={setSelectedReport}
-                isLoading={isLoading}
+                isLoading={isRawLoading}
               />
             </div>
           </div>
 
-          {/* Row 3: Bottom Analytics and Distribution Cards */}
+          {/* Row 3: Bottom Analytics and Distribution Cards (Server-side Aggregated) */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            <IncidentTrendCard reports={reports} isLoading={isLoading} />
-            <EventDistributionCard reports={reports} isLoading={isLoading} />
-            <VerificationSummaryCard reports={reports} isLoading={isLoading} />
+            <IncidentTrendCard
+              distribution={summaryData?.diurnal_distribution}
+              reports={reports}
+              isLoading={isSummaryLoading}
+            />
+            <EventDistributionCard
+              distribution={summaryData?.category_distribution}
+              reports={reports}
+              isLoading={isSummaryLoading}
+            />
+            <VerificationSummaryCard
+              verification={summaryData?.verification}
+              totalCount={summaryData?.total_count}
+              reports={reports}
+              isLoading={isSummaryLoading}
+            />
           </div>
         </div>
       </main>

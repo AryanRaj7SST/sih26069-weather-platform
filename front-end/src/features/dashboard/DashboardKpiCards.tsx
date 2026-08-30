@@ -1,19 +1,33 @@
 import React, { useMemo } from 'react';
 import { AlertCircle, FileText, Clock, CheckCircle2 } from 'lucide-react';
-import { ReportDetailData, PaginationMeta } from '@/types';
+import { DashboardSummaryData, PaginationMeta, ReportDetailData } from '@/types';
 
 interface DashboardKpiCardsProps {
-  reports: ReportDetailData[];
+  summary?: DashboardSummaryData;
+  reports?: ReportDetailData[];
   pagination?: PaginationMeta;
   isLoading: boolean;
 }
 
 export const DashboardKpiCards: React.FC<DashboardKpiCardsProps> = ({
-  reports,
+  summary,
+  reports = [],
   pagination,
   isLoading,
 }) => {
   const stats = useMemo(() => {
+    if (summary) {
+      return {
+        totalCount: summary.total_count,
+        reportsLast24h: summary.count_24h,
+        pct24h: summary.last_24h_pct,
+        pendingCount: summary.verification.pending_count,
+        verifiedCount: summary.verification.verified_count,
+        verifiedPct: summary.verification.verified_rate,
+        severeCount: summary.severity.severe_high_count,
+      };
+    }
+
     const totalCount = pagination?.total_records ?? reports.length;
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
@@ -55,7 +69,7 @@ export const DashboardKpiCards: React.FC<DashboardKpiCardsProps> = ({
       verifiedPct,
       severeCount,
     };
-  }, [reports, pagination]);
+  }, [summary, reports, pagination]);
 
   if (isLoading) {
     return (
@@ -153,7 +167,7 @@ export const DashboardKpiCards: React.FC<DashboardKpiCardsProps> = ({
             {stats.verifiedPct}%
           </span>
           <span className="text-xs text-slate-500 font-semibold">
-            ({stats.verifiedCount} / {reports.length})
+            ({stats.verifiedCount} / {stats.totalCount})
           </span>
         </div>
         {/* Verification Progress Bar */}

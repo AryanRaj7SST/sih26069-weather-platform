@@ -1,17 +1,39 @@
 import React, { useMemo } from 'react';
 import { BarChart3 } from 'lucide-react';
-import { ReportDetailData } from '@/types';
+import { CategoryDistributionItem, ReportDetailData } from '@/types';
 
 interface EventDistributionCardProps {
-  reports: ReportDetailData[];
+  distribution?: CategoryDistributionItem[];
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
 export const EventDistributionCard: React.FC<EventDistributionCardProps> = ({
-  reports,
+  distribution: inputDistribution,
+  reports = [],
   isLoading,
 }) => {
   const distribution = useMemo(() => {
+    if (inputDistribution && inputDistribution.length > 0) {
+      const sorted = [...inputDistribution].sort((a, b) => b.count - a.count);
+      const top4 = sorted.slice(0, 4).map((item) => ({
+        title: item.category_name,
+        count: item.count,
+        pct: item.percentage,
+      }));
+      const otherItems = sorted.slice(4);
+      if (otherItems.length > 0) {
+        const otherCount = otherItems.reduce((sum, item) => sum + item.count, 0);
+        const otherPct = otherItems.reduce((sum, item) => sum + item.percentage, 0);
+        top4.push({
+          title: 'Other Hazards',
+          count: otherCount,
+          pct: otherPct,
+        });
+      }
+      return top4;
+    }
+
     if (reports.length === 0) return [];
 
     const catCounts: Record<string, { title: string; count: number }> = {};
@@ -40,7 +62,7 @@ export const EventDistributionCard: React.FC<EventDistributionCardProps> = ({
       count: item.count,
       pct: Math.round((item.count / reports.length) * 100),
     }));
-  }, [reports]);
+  }, [inputDistribution, reports]);
 
   const barColors = ['bg-blue-600', 'bg-sky-500', 'bg-amber-500', 'bg-slate-400'];
 

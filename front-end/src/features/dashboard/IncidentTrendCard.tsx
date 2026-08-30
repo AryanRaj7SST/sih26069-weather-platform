@@ -9,22 +9,34 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { ReportDetailData } from '@/types';
+import { DiurnalDistributionItem, ReportDetailData } from '@/types';
 
 interface IncidentTrendCardProps {
-  reports: ReportDetailData[];
+  distribution?: DiurnalDistributionItem[];
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
-export const IncidentTrendCard: React.FC<IncidentTrendCardProps> = ({ reports, isLoading }) => {
+export const IncidentTrendCard: React.FC<IncidentTrendCardProps> = ({
+  distribution,
+  reports = [],
+  isLoading,
+}) => {
   const chartData = useMemo(() => {
-    // Group reports into 4 standard daily time intervals (00:00, 06:00, 12:00, 18:00)
+    if (distribution && distribution.length > 0) {
+      return distribution.map((item) => ({
+        time: item.window,
+        label: item.label,
+        count: item.count,
+      }));
+    }
+
+    // Fallback: Group reports into 4 standard daily time intervals (00:00, 06:00, 12:00, 18:00)
     const buckets: Record<string, number> = {
       '00:00': 0,
       '06:00': 0,
       '12:00': 0,
       '18:00': 0,
-      '24:00': 0,
     };
 
     for (const report of reports) {
@@ -36,8 +48,7 @@ export const IncidentTrendCard: React.FC<IncidentTrendCardProps> = ({ reports, i
           if (hour < 6) buckets['00:00']++;
           else if (hour < 12) buckets['06:00']++;
           else if (hour < 18) buckets['12:00']++;
-          else if (hour < 24) buckets['18:00']++;
-          else buckets['24:00']++;
+          else buckets['18:00']++;
         }
       }
     }
@@ -46,7 +57,9 @@ export const IncidentTrendCard: React.FC<IncidentTrendCardProps> = ({ reports, i
       time,
       count,
     }));
-  }, [reports]);
+  }, [distribution, reports]);
+
+  const hasData = chartData.some((item) => item.count > 0);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between">
@@ -63,7 +76,7 @@ export const IncidentTrendCard: React.FC<IncidentTrendCardProps> = ({ reports, i
           <div className="h-full w-full flex items-center justify-center bg-slate-50 rounded-xl animate-pulse">
             <span className="text-xs text-slate-400">Loading trends...</span>
           </div>
-        ) : reports.length === 0 ? (
+        ) : !hasData ? (
           <div className="h-full w-full flex items-center justify-center bg-slate-50/50 rounded-xl text-center p-4">
             <span className="text-xs text-slate-400 font-medium">No incident data available for selected filters.</span>
           </div>
@@ -89,9 +102,12 @@ export const IncidentTrendCard: React.FC<IncidentTrendCardProps> = ({ reports, i
                 cursor={{ fill: '#f8fafc' }}
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
+                    const row = payload[0].payload as { time: string; label?: string; count: number };
                     return (
                       <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-md text-xs">
-                        <span className="font-semibold text-slate-700">{payload[0].payload.time} Window</span>
+                        <span className="font-semibold text-slate-700">
+                          {row.label || `${row.time} Window`}
+                        </span>
                         <div className="text-blue-600 font-bold mt-0.5">
                           {payload[0].value} {Number(payload[0].value) === 1 ? 'Report' : 'Reports'}
                         </div>

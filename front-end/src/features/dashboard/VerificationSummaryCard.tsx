@@ -1,18 +1,45 @@
 import React, { useMemo } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { ReportDetailData } from '@/types';
+import { ReportDetailData, VerificationBreakdown } from '@/types';
 
 interface VerificationSummaryCardProps {
-  reports: ReportDetailData[];
+  verification?: VerificationBreakdown;
+  totalCount?: number;
+  reports?: ReportDetailData[];
   isLoading: boolean;
 }
 
 export const VerificationSummaryCard: React.FC<VerificationSummaryCardProps> = ({
-  reports,
+  verification,
+  totalCount,
+  reports = [],
   isLoading,
 }) => {
   const stats = useMemo(() => {
+    if (verification) {
+      const verified = verification.verified_count;
+      const pending = verification.pending_count;
+      const rejected = verification.rejected_count;
+      const total = totalCount ?? (verified + pending + rejected);
+      const verifiedPct = verification.verified_rate;
+
+      const data = [
+        { name: 'Verified', value: verified, color: '#10b981' },
+        { name: 'Pending / Review', value: pending, color: '#f59e0b' },
+        { name: 'Rejected', value: rejected, color: '#94a3b8' },
+      ].filter((item) => item.value > 0);
+
+      return {
+        verified,
+        pending,
+        rejected,
+        total,
+        verifiedPct,
+        data: data.length > 0 ? data : [{ name: 'None', value: 1, color: '#e2e8f0' }],
+      };
+    }
+
     let verified = 0;
     let pending = 0;
     let rejected = 0;
@@ -44,7 +71,7 @@ export const VerificationSummaryCard: React.FC<VerificationSummaryCardProps> = (
       verifiedPct,
       data: data.length > 0 ? data : [{ name: 'None', value: 1, color: '#e2e8f0' }],
     };
-  }, [reports]);
+  }, [verification, totalCount, reports]);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between">
