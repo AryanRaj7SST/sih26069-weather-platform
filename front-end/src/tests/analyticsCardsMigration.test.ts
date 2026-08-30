@@ -1,11 +1,16 @@
-// Comprehensive Unit Test Suite for Analytics Summary Cards Migration
+// Comprehensive Unit Test Suite for Analytics Summary Cards Migration & Recent/Regional Optimizations
 
 import { describe, it, expect } from 'vitest';
-import { dashboardKeys } from '../lib/queryKeys';
+import { analyticsKeys, dashboardKeys, incidentKeys } from '../lib/queryKeys';
 import {
+  AnalyticsRegionalData,
+  AnalyticsRegionalQueryParams,
   CategoryDistributionItem,
   DashboardSummaryData,
   DashboardSummaryQueryParams,
+  IncidentListQueryParams,
+  IncidentSummary,
+  RegionalDistributionItem,
   SeverityBreakdown,
   VerificationBreakdown,
 } from '../types';
@@ -196,6 +201,114 @@ describe('Analytics Summary Cards Migration - Data Mapping & Presentation Logic'
           time_range: '30d',
         },
       ]);
+    });
+  });
+
+  describe('7. Recent Reports Table Bounded Query & Mapping', () => {
+    it('constructs bounded incident list query parameters (page_size: 8, occurred_at desc)', () => {
+      const recentParams: IncidentListQueryParams = {
+        page: 1,
+        page_size: 8,
+        sort_by: 'occurred_at',
+        sort_order: 'desc',
+        category: 'FLOOD_WATERLOGGING',
+        from_date: '2026-08-23T00:00:00.000Z',
+      };
+
+      const key = incidentKeys.list(recentParams as Record<string, unknown>);
+      expect(key).toEqual([
+        'incidents',
+        'list',
+        {
+          category: 'FLOOD_WATERLOGGING',
+          from_date: '2026-08-23T00:00:00.000Z',
+          page: 1,
+          page_size: 8,
+          sort_by: 'occurred_at',
+          sort_order: 'desc',
+        },
+      ]);
+    });
+
+    it('slices and formats exactly up to 8 recent incidents', () => {
+      const mockIncidents: IncidentSummary[] = Array.from({ length: 15 }, (_, i) => ({
+        id: `inc-${i}`,
+        tracking_id: `TRK-${1000 + i}`,
+        title: `Incident ${i}`,
+        category: { code: 'FLOOD_WATERLOGGING', title: 'Flooding & Waterlogging' },
+        severity: 'HIGH',
+        location: { name: 'Kurla, Mumbai', latitude: 19.07, longitude: 72.88 },
+        occurred_at: '2026-08-30T06:00:00Z',
+        verification_status: 'VERIFIED',
+        credibility_score: 0.85,
+        readiness: 'READY',
+        media_count: 1,
+        created_at: '2026-08-30T06:05:00Z',
+      }));
+
+      const recentList = mockIncidents.slice(0, 8);
+      expect(recentList).toHaveLength(8);
+      expect(recentList[0].tracking_id).toBe('TRK-1000');
+      expect(recentList[7].tracking_id).toBe('TRK-1007');
+    });
+  });
+
+  describe('8. Regional Activity Server Aggregation Mapping', () => {
+    it('constructs normalized query keys for analytics regional requests', () => {
+      const regionalParams: AnalyticsRegionalQueryParams = {
+        time_range: '7d',
+        category: 'FLOOD_WATERLOGGING',
+        severity: 'HIGH',
+        status: 'VERIFIED',
+        bbox: '72.0,18.0,74.0,20.0',
+      };
+
+      const key = analyticsKeys.regional(regionalParams as Record<string, unknown>);
+      expect(key).toEqual([
+        'analytics',
+        'regional',
+        {
+          bbox: '72.0,18.0,74.0,20.0',
+          category: 'FLOOD_WATERLOGGING',
+          severity: 'HIGH',
+          status: 'VERIFIED',
+          time_range: '7d',
+        },
+      ]);
+    });
+
+    it('presents top 5 server-provided regions directly with counts and percentages', () => {
+      const mockRegionalData: AnalyticsRegionalData = {
+        time_range: '7d',
+        total_classified: 2638,
+        regions: [
+          { region_code: 'MH', region_name: 'Maharashtra', count: 1422, percentage: 54 },
+          { region_code: 'TN', region_name: 'Tamil Nadu', count: 350, percentage: 13 },
+          { region_code: 'KA', region_name: 'Karnataka', count: 337, percentage: 13 },
+          { region_code: 'DL', region_name: 'Delhi NCR', count: 324, percentage: 12 },
+          { region_code: 'OTHER', region_name: 'Other Regions', count: 153, percentage: 6 },
+          { region_code: 'KL', region_name: 'Kerala', count: 26, percentage: 1 },
+          { region_code: 'RJ', region_name: 'Rajasthan', count: 26, percentage: 1 },
+        ],
+      };
+
+      const top5: RegionalDistributionItem[] = mockRegionalData.regions.slice(0, 5);
+      expect(top5).toHaveLength(5);
+      expect(top5[0]).toEqual({ region_code: 'MH', region_name: 'Maharashtra', count: 1422, percentage: 54 });
+      expect(top5[1]).toEqual({ region_code: 'TN', region_name: 'Tamil Nadu', count: 350, percentage: 13 });
+      expect(top5[4]).toEqual({ region_code: 'OTHER', region_name: 'Other Regions', count: 153, percentage: 6 });
+      expect(top5.some((r) => r.region_code === 'KL')).toBe(false);
+    });
+
+    it('safely handles empty regional data', () => {
+      const emptyRegional: AnalyticsRegionalData = {
+        time_range: '24h',
+        total_classified: 0,
+        regions: [],
+      };
+
+      const top5 = emptyRegional.regions.slice(0, 5);
+      expect(top5).toEqual([]);
     });
   });
 });

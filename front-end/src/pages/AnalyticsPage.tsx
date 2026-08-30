@@ -16,14 +16,15 @@ import {
   ObservedPatternsCard,
   GEOGRAPHY_OPTIONS,
 } from '@/features/analytics';
+import { incidentApi } from '@/services/incidentApi';
 import { dashboardApi } from '@/services/dashboardApi';
 import { analyticsApi } from '@/services/analyticsApi';
-import { fetchAllDashboardReports } from '@/services/reportApi';
-import { dashboardKeys, analyticsKeys } from '@/lib/queryKeys';
+import { incidentKeys, dashboardKeys, analyticsKeys } from '@/lib/queryKeys';
 import {
+  AnalyticsRegionalQueryParams,
   AnalyticsTrendQueryParams,
   DashboardSummaryQueryParams,
-  ReportListQueryParams,
+  IncidentListQueryParams,
 } from '@/types';
 import { BarChart3, Filter, AlertCircle } from 'lucide-react';
 
@@ -39,7 +40,7 @@ export const AnalyticsPage: React.FC = () => {
   const [tempFilters, setTempFilters] = useState<AnalyticsFilterState>(filters);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Compute server-aggregated summary parameters
+  // 1. Summary Metrics Query (dashboardApi.getSummary)
   const summaryParams = useMemo<DashboardSummaryQueryParams>(() => {
     const params: DashboardSummaryQueryParams = {};
 
@@ -62,12 +63,12 @@ export const AnalyticsPage: React.FC = () => {
     return params;
   }, [filters]);
 
-  // Fetch server-side summary statistics via dashboardApi
   const {
     data: summaryResponse,
     isLoading: isSummaryLoading,
     isError: isSummaryError,
     error: summaryError,
+    isFetching: isSummaryFetching,
   } = useQuery({
     queryKey: dashboardKeys.summary(summaryParams as Record<string, unknown>),
     queryFn: ({ signal }) => dashboardApi.getSummary(summaryParams, signal),
@@ -76,7 +77,7 @@ export const AnalyticsPage: React.FC = () => {
 
   const summaryData = summaryResponse?.data;
 
-  // Compute server-aggregated trend parameters
+  // 2. Activity Trends Query (analyticsApi.getTrends)
   const trendParams = useMemo<AnalyticsTrendQueryParams>(() => {
     const params: AnalyticsTrendQueryParams = {};
 
@@ -99,7 +100,6 @@ export const AnalyticsPage: React.FC = () => {
     return params;
   }, [filters]);
 
-  // Fetch server-side activity trends via analyticsApi
   const {
     data: trendResponse,
     isLoading: isTrendLoading,
@@ -113,11 +113,51 @@ export const AnalyticsPage: React.FC = () => {
 
   const trendData = trendResponse?.data;
 
-  // Compute API query params for raw report consumers (RecentReportsTable, RegionalActivityCard)
-  const queryParams = useMemo<ReportListQueryParams>(() => {
-    const params: ReportListQueryParams = {};
+  // 3. Regional Activity Distribution Query (analyticsApi.getRegional)
+  const regionalParams = useMemo<AnalyticsRegionalQueryParams>(() => {
+    const params: AnalyticsRegionalQueryParams = {};
 
-    // Date range filter
+    if (filters.timeRange) {
+      params.time_range = filters.timeRange;
+    }
+    if (filters.category !== 'ALL') {
+      params.category = filters.category;
+    }
+    if (filters.severity !== 'ALL') {
+      params.severity = filters.severity;
+    }
+    if (filters.status !== 'ALL') {
+      params.status = filters.status;
+    }
+    if (filters.region !== 'ALL' && GEOGRAPHY_OPTIONS[filters.region]?.bbox) {
+      params.bbox = GEOGRAPHY_OPTIONS[filters.region].bbox;
+    }
+
+    return params;
+  }, [filters]);
+
+  const {
+    data: regionalResponse,
+    isLoading: isRegionalLoading,
+    isError: isRegionalError,
+    error: regionalError,
+  } = useQuery({
+    queryKey: analyticsKeys.regional(regionalParams as Record<string, unknown>),
+    queryFn: ({ signal }) => analyticsApi.getRegional(regionalParams, signal),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  const regionalData = regionalResponse?.data;
+
+  // 4. Recent Incidents Query (Optimized single-page fetch for RecentReportsTable)
+  const recentParams = useMemo<IncidentListQueryParams>(() => {
+    const params: IncidentListQueryParams = {
+      page: 1,
+      page_size: 8,
+      sort_by: 'occurred_at',
+      sort_order: 'desc',
+    };
+
     const now = new Date();
     if (filters.timeRange === '24h') {
       params.from_date = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
@@ -127,22 +167,15 @@ export const AnalyticsPage: React.FC = () => {
       params.from_date = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    // Category filter
     if (filters.category !== 'ALL') {
       params.category = filters.category;
     }
-
-    // Severity filter
     if (filters.severity !== 'ALL') {
       params.severity = filters.severity;
     }
-
-    // Status filter
     if (filters.status !== 'ALL') {
-      params.status = filters.status;
+      params.verification_status = filters.status;
     }
-
-    // Geography / bbox filter
     if (filters.region !== 'ALL' && GEOGRAPHY_OPTIONS[filters.region]?.bbox) {
       params.bbox = GEOGRAPHY_OPTIONS[filters.region].bbox;
     }
@@ -150,21 +183,18 @@ export const AnalyticsPage: React.FC = () => {
     return params;
   }, [filters]);
 
-  // Fetch raw reports for non-aggregated components
   const {
-    data: response,
-    isLoading: isRawLoading,
-    isError: isRawError,
-    error: rawError,
-    isFetching,
+    data: recentResponse,
+    isLoading: isRecentLoading,
+    isError: isRecentError,
+    error: recentError,
   } = useQuery({
-    queryKey: ['analytics-reports', queryParams],
-    queryFn: () => fetchAllDashboardReports(queryParams),
+    queryKey: incidentKeys.list(recentParams as Record<string, unknown>),
+    queryFn: ({ signal }) => incidentApi.listIncidents(recentParams, signal),
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 
-  const reports = response?.data || [];
-  const pagination = response?.pagination;
+  const recentIncidents = recentResponse?.data || [];
 
   const handleApplyFilters = () => {
     setFilters(tempFilters);
@@ -184,8 +214,8 @@ export const AnalyticsPage: React.FC = () => {
     setMobileFilterOpen(false);
   };
 
-  const isAnyError = isRawError || isTrendError || isSummaryError;
-  const activeError = summaryError || trendError || rawError;
+  const isAnyError = isRegionalError || isTrendError || isSummaryError || isRecentError;
+  const activeError = summaryError || trendError || regionalError || recentError;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
@@ -240,15 +270,13 @@ export const AnalyticsPage: React.FC = () => {
               onTempChange={setTempFilters}
               onApply={handleApplyFilters}
               onReset={handleResetFilters}
-              isFetching={isFetching}
+              isFetching={isSummaryFetching}
             />
           </div>
 
           {/* 1. KPI Cards (Migrated to dashboardApi.getSummary) */}
           <AnalyticsKpiCards
             summary={summaryData}
-            reports={reports}
-            pagination={pagination}
             timeRange={filters.timeRange}
             isLoading={isSummaryLoading}
           />
@@ -256,7 +284,6 @@ export const AnalyticsPage: React.FC = () => {
           {/* 2. Main Activity Chart (Migrated to analyticsApi.getTrends) */}
           <ReportActivityChart
             trendData={trendData}
-            reports={reports}
             timeRange={filters.timeRange}
             isLoading={isTrendLoading}
           />
@@ -265,39 +292,35 @@ export const AnalyticsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <EventDistributionCard
               distribution={summaryData?.category_distribution}
-              reports={reports}
               isLoading={isSummaryLoading}
             />
             <SeverityDistributionCard
               severity={summaryData?.severity}
-              reports={reports}
               isLoading={isSummaryLoading}
             />
           </div>
 
-          {/* 4. Recent Reports Table (Raw data consumer) */}
+          {/* 4. Recent Reports Table (Optimized single-page incidentApi.listIncidents query) */}
           <RecentReportsTable
-            reports={reports}
-            isLoading={isRawLoading}
+            reports={recentIncidents}
+            isLoading={isRecentLoading}
           />
 
-          {/* 5. 2-Column Grid: Verification Status & Regional Activity */}
+          {/* 5. 2-Column Grid: Verification Status & Regional Activity (Migrated to analyticsApi.getRegional) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <VerificationStatusCard
               verification={summaryData?.verification}
-              reports={reports}
               isLoading={isSummaryLoading}
             />
             <RegionalActivityCard
-              reports={reports}
-              isLoading={isRawLoading}
+              regionalData={regionalData}
+              isLoading={isRegionalLoading}
             />
           </div>
 
           {/* 6. Observed Patterns Banner (Migrated to dashboardApi.getSummary) */}
           <ObservedPatternsCard
             summary={summaryData}
-            reports={reports}
             isLoading={isSummaryLoading}
           />
         </div>

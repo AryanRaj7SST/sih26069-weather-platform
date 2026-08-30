@@ -233,3 +233,62 @@ async def test_backward_compatibility_existing_routes(
     res_ver = await api_client.get("/api/v1/verification/queue?page=1&page_size=5")
     assert res_ver.status_code == 200
     assert res_ver.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_analytics_regional_api_success_and_filters(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Test GET /api/v1/analytics/regional default, time_range variations, and filter parameters."""
+    # 1. Default request (7d)
+    res = await api_client.get("/api/v1/analytics/regional")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["success"] is True
+    assert "data" in body
+    assert "meta" in body
+    data = body["data"]
+    assert data["time_range"] == "7d"
+    assert isinstance(data["total_classified"], int)
+    assert isinstance(data["regions"], list)
+    for reg in data["regions"]:
+        assert "region_code" in reg
+        assert "region_name" in reg
+        assert "count" in reg
+        assert "percentage" in reg
+        assert reg["count"] >= 0
+        assert 0 <= reg["percentage"] <= 100
+
+    # 2. Time range variations
+    for tr in ["24h", "7d", "30d", "all"]:
+        r_tr = await api_client.get(f"/api/v1/analytics/regional?time_range={tr}")
+        assert r_tr.status_code == 200
+        assert r_tr.json()["data"]["time_range"] == tr
+
+    # 3. Filter combinations
+    res_filt = await api_client.get(
+        "/api/v1/analytics/regional?time_range=7d&severity=SEVERE&status=VERIFIED&bbox=72.0,18.0,74.0,20.0"
+    )
+    assert res_filt.status_code == 200
+    assert res_filt.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_analytics_regional_api_validation_errors(
+    api_client: AsyncClient,
+) -> None:
+    """Test validation errors for invalid query parameters in /api/v1/analytics/regional."""
+    # Invalid time_range (e.g. 48h is not in analytics UI time ranges)
+    res_tr = await api_client.get("/api/v1/analytics/regional?time_range=48h")
+    assert res_tr.status_code == 422
+    assert res_tr.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    # Invalid severity
+    res_sev = await api_client.get("/api/v1/analytics/regional?severity=SUPER_CRITICAL")
+    assert res_sev.status_code == 422
+    assert res_sev.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    # Malformed bbox
+    res_bbox = await api_client.get("/api/v1/analytics/regional?bbox=not_a_valid_bbox")
+    assert res_bbox.status_code == 422

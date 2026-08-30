@@ -1,6 +1,12 @@
 // Analytics Aggregation API Client
 
-import { ApiResponse, AnalyticsTrendData, AnalyticsTrendQueryParams } from '@/types';
+import {
+  ApiResponse,
+  AnalyticsRegionalData,
+  AnalyticsRegionalQueryParams,
+  AnalyticsTrendData,
+  AnalyticsTrendQueryParams,
+} from '@/types';
 import { apiClient } from './client';
 
 export const analyticsApi = {
@@ -21,5 +27,23 @@ export const analyticsApi = {
 
     const query = searchParams.toString();
     return apiClient<ApiResponse<AnalyticsTrendData>>(`/analytics/trends${query ? `?${query}` : ''}`, { signal });
+  },
+
+  /**
+   * Retrieve SQL-aggregated regional distribution data.
+   */
+  async getRegional(
+    params: AnalyticsRegionalQueryParams = {},
+    signal?: AbortSignal
+  ): Promise<ApiResponse<AnalyticsRegionalData>> {
+    const searchParams = new URLSearchParams();
+    if (params.time_range) searchParams.append('time_range', params.time_range);
+    if (params.category && params.category !== 'ALL') searchParams.append('category', params.category);
+    if (params.severity && params.severity !== 'ALL') searchParams.append('severity', params.severity);
+    if (params.status && params.status !== 'ALL') searchParams.append('status', params.status);
+    if (params.bbox) searchParams.append('bbox', params.bbox);
+
+    const query = searchParams.toString();
+    return apiClient<ApiResponse<AnalyticsRegionalData>>(`/analytics/regional${query ? `?${query}` : ''}`, { signal });
   },
 };

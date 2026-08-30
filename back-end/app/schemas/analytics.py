@@ -122,3 +122,40 @@ class AnalyticsTrendResponse(BaseModel):
     success: bool = True
     data: AnalyticsTrendData
     meta: dict = Field(default_factory=dict)
+
+
+class RegionalDistributionItem(BaseModel):
+    """Regional aggregation bucket item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    region_code: str = Field(..., description="Two-letter region code or OTHER")
+    region_name: str = Field(..., description="Display name of the region")
+    count: int = Field(default=0, ge=0, description="Total incident count in region")
+    percentage: int = Field(
+        default=0, ge=0, le=100, description="Percentage of total classified reports"
+    )
+
+
+class AnalyticsRegionalData(BaseModel):
+    """Payload data for regional analytics distribution."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    time_range: str = Field(..., description="Requested time range filter")
+    total_classified: int = Field(
+        default=0, ge=0, description="Total reports classified across regions"
+    )
+    regions: List[RegionalDistributionItem] = Field(
+        default_factory=list, description="Ranked regional breakdown"
+    )
+
+
+class AnalyticsRegionalResponse(BaseModel):
+    """Standard envelope response for regional analytics API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    success: bool = True
+    data: AnalyticsRegionalData
+    meta: dict = Field(default_factory=dict)

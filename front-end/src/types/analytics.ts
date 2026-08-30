@@ -1,4 +1,4 @@
-// Dashboard and Analytics Aggregation Contracts (Matching Step 2B Schemas)
+// Dashboard and Analytics Aggregation Contracts (Matching Backend Schemas)
 
 export interface VerificationBreakdown {
   verified_count: number;
@@ -42,7 +42,7 @@ export interface DashboardSummaryData {
 }
 
 export interface DashboardSummaryQueryParams {
-  time_range?: '24h' | '48h' | '7d' | 'all' | string;
+  time_range?: '24h' | '48h' | '7d' | '30d' | 'all' | string;
   category?: string;
   severity?: string;
   status?: string;
@@ -65,6 +65,27 @@ export interface AnalyticsTrendData {
 export interface AnalyticsTrendQueryParams {
   time_range?: '24h' | '7d' | '30d' | 'all' | string;
   interval?: 'hour' | 'day' | string;
+  category?: string;
+  severity?: string;
+  status?: string;
+  bbox?: string;
+}
+
+export interface RegionalDistributionItem {
+  region_code: string;
+  region_name: string;
+  count: number;
+  percentage: number;
+}
+
+export interface AnalyticsRegionalData {
+  time_range: string;
+  total_classified: number;
+  regions: RegionalDistributionItem[];
+}
+
+export interface AnalyticsRegionalQueryParams {
+  time_range?: '24h' | '7d' | '30d' | 'all' | string;
   category?: string;
   severity?: string;
   status?: string;

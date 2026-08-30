@@ -41,5 +41,6 @@ export const analyticsKeys = {
   all: ['analytics'] as const,
   trendsAll: () => [...analyticsKeys.all, 'trends'] as const,
   trends: (params?: Record<string, unknown>) => [...analyticsKeys.trendsAll(), normalizeParams(params)] as const,
+  regionalAll: () => [...analyticsKeys.all, 'regional'] as const,
+  regional: (params?: Record<string, unknown>) => [...analyticsKeys.regionalAll(), normalizeParams(params)] as const,
 };
-

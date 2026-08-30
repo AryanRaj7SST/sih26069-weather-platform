@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
-import { ReportDetailData } from '@/types';
+import { IncidentSummary, ReportDetailData } from '@/types';
 
 interface RecentReportsTableProps {
-  reports: ReportDetailData[];
+  reports: (ReportDetailData | IncidentSummary)[];
   isLoading: boolean;
 }
 
@@ -14,7 +14,8 @@ export const RecentReportsTable: React.FC<RecentReportsTableProps> = ({
 }) => {
   const recentList = reports.slice(0, 8);
 
-  const formatTime = (dateStr: string) => {
+  const formatTime = (dateStr?: string | null) => {
+    if (!dateStr) return 'N/A';
     try {
       const d = new Date(dateStr);
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -110,10 +111,13 @@ export const RecentReportsTable: React.FC<RecentReportsTableProps> = ({
             {recentList.map((r) => (
               <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
                 <td className="px-6 py-3.5 font-bold text-slate-900">
-                  {r.category?.title || r.title}
+                  {r.category?.title || ('title' in r ? r.title : 'Weather Event')}
                 </td>
                 <td className="px-6 py-3.5 text-slate-700">
-                  {r.location?.name || `${r.location?.latitude.toFixed(2)}, ${r.location?.longitude.toFixed(2)}`}
+                  {r.location?.name ||
+                    (r.location?.latitude != null && r.location?.longitude != null
+                      ? `${r.location.latitude.toFixed(2)}, ${r.location.longitude.toFixed(2)}`
+                      : 'Unknown')}
                 </td>
                 <td className="px-6 py-3.5">
                   {getSeverityBadge(r.severity)}
@@ -122,7 +126,7 @@ export const RecentReportsTable: React.FC<RecentReportsTableProps> = ({
                   {getStatusText(r.verification_status)}
                 </td>
                 <td className="px-6 py-3.5 font-mono text-slate-500">
-                  {formatTime(r.occurred_at || r.created_at)}
+                  {formatTime(r.occurred_at || ('created_at' in r ? r.created_at : null))}
                 </td>
                 <td className="px-6 py-3.5 text-right">
                   <Link

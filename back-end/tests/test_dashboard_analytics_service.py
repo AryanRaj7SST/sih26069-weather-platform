@@ -341,3 +341,169 @@ async def test_analytics_trends_hourly_and_daily(db_session: AsyncSession) -> No
     )
     assert thirty_day_trends.time_range == "30d"
     assert len(thirty_day_trends.buckets) == 14
+
+
+@pytest.mark.asyncio
+async def test_regional_distribution_empty_dataset(db_session: AsyncSession) -> None:
+    """Test regional distribution with empty filter returns 0 total and empty regions list."""
+    reg = await incident_query_service.get_regional_distribution(
+        session=db_session,
+        time_range="all",
+        category="NONEXISTENT_CATEGORY_XYZ",
+    )
+    assert reg.total_classified == 0
+    assert reg.regions == []
+    assert reg.time_range == "all"
+
+
+@pytest.mark.asyncio
+async def test_regional_distribution_classification_and_token_safety(
+    db_session: AsyncSession,
+) -> None:
+    """Test classification rules: token safety, city names, spatial fallback, and OTHER fallback."""
+    # Ensure a data source exists
+    source_res = await db_session.execute(select(Source).limit(1))
+    source = source_res.scalar_one_or_none()
+    if not source:
+        source = Source(
+            id=uuid.uuid4(),
+            source_code="TEST_REGIONAL_SRC",
+            source_type="CITIZEN",
+            name="Test Intake Source",
+            base_trust_score=0.5,
+            is_active=True,
+        )
+        db_session.add(source)
+        await db_session.flush()
+
+    now = datetime.now(timezone.utc)
+    tag = f"REG-TEST-{uuid.uuid4().hex[:6].upper()}"
+
+    reports = [
+        # 1. Known city match: Pune -> MH
+        WeatherReport(
+            id=uuid.uuid4(),
+            tracking_id=f"{tag}-MH1",
+            source_id=source.id,
+            severity="HIGH",
+            title=f"Pune Test {tag}",
+            location_name="Shivajinagar, Pune",
+            latitude=18.5204,
+            longitude=73.8567,
+            geom="SRID=4326;POINT(73.8567 18.5204)",
+            occurred_at=now - timedelta(hours=1),
+            verification_status="VERIFIED",
+            processing_status="COMPLETED",
+        ),
+        # 2. Known city match: Chennai -> TN
+        WeatherReport(
+            id=uuid.uuid4(),
+            tracking_id=f"{tag}-TN1",
+            source_id=source.id,
+            severity="MODERATE",
+            title=f"Chennai Test {tag}",
+            location_name="T. Nagar, Chennai",
+            latitude=13.0418,
+            longitude=80.2341,
+            geom="SRID=4326;POINT(80.2341 13.0418)",
+            occurred_at=now - timedelta(hours=2),
+            verification_status="VERIFIED",
+            processing_status="COMPLETED",
+        ),
+        # 3. Token safety: 'Vasai Road' contains 'as' but must NOT match Assam (AS),
+        # matches MH via Mumbai token or spatial bbox
+        WeatherReport(
+            id=uuid.uuid4(),
+            tracking_id=f"{tag}-MH2",
+            source_id=source.id,
+            severity="LOW",
+            title=f"Vasai Test {tag}",
+            location_name="Vasai Road, Mumbai",
+            latitude=19.38,
+            longitude=72.83,
+            geom="SRID=4326;POINT(72.83 19.38)",
+            occurred_at=now - timedelta(hours=3),
+            verification_status="PENDING",
+            processing_status="COMPLETED",
+        ),
+        # 4. Null location_name: Spatial fallback to Delhi NCR (DL)
+        WeatherReport(
+            id=uuid.uuid4(),
+            tracking_id=f"{tag}-DL1",
+            source_id=source.id,
+            severity="SEVERE",
+            title=f"Delhi GPS Test {tag}",
+            location_name=None,
+            latitude=28.6139,
+            longitude=77.2090,
+            geom="SRID=4326;POINT(77.2090 28.6139)",
+            occurred_at=now - timedelta(hours=4),
+            verification_status="VERIFIED",
+            processing_status="COMPLETED",
+        ),
+        # 5. Null location_name: Spatial fallback to Bengaluru (KA)
+        WeatherReport(
+            id=uuid.uuid4(),
+            tracking_id=f"{tag}-KA1",
+            source_id=source.id,
+            severity="HIGH",
+            title=f"Bengaluru GPS Test {tag}",
+            location_name=None,
+            latitude=12.9716,
+            longitude=77.5946,
+            geom="SRID=4326;POINT(77.5946 12.9716)",
+            occurred_at=now - timedelta(hours=5),
+            verification_status="UNDER_REVIEW",
+            processing_status="COMPLETED",
+        ),
+        # 6. Unmatched location name outside India -> OTHER
+        WeatherReport(
+            id=uuid.uuid4(),
+            tracking_id=f"{tag}-OTH1",
+            source_id=source.id,
+            severity="LOW",
+            title=f"Unknown Test {tag}",
+            location_name="Mid-Atlantic Buoy Station",
+            latitude=0.0,
+            longitude=0.0,
+            geom="SRID=4326;POINT(0.0 0.0)",
+            occurred_at=now - timedelta(hours=6),
+            verification_status="PENDING",
+            processing_status="COMPLETED",
+        ),
+    ]
+
+    db_session.add_all(reports)
+    await db_session.flush()
+
+    res = await incident_query_service.get_regional_distribution(
+        session=db_session,
+        time_range="24h",
+    )
+
+    assert res.total_classified >= 6
+    code_map = {r.region_code: r for r in res.regions}
+
+    assert "MH" in code_map
+    assert code_map["MH"].count >= 2
+    assert code_map["MH"].region_name == "Maharashtra"
+
+    assert "TN" in code_map
+    assert code_map["TN"].count >= 1
+    assert code_map["TN"].region_name == "Tamil Nadu"
+
+    assert "DL" in code_map
+    assert code_map["DL"].count >= 1
+    assert code_map["DL"].region_name == "Delhi NCR"
+
+    assert "KA" in code_map
+    assert code_map["KA"].count >= 1
+    assert code_map["KA"].region_name == "Karnataka"
+
+    assert "OTHER" in code_map
+    assert code_map["OTHER"].count >= 1
+    assert code_map["OTHER"].region_name == "Other Regions"
+
+    # Verify percentages sum close to 100
+    total_pct = sum(r.percentage for r in res.regions)
+    assert 95 <= total_pct <= 105

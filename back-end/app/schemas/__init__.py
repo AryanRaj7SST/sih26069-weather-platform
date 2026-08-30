@@ -1,4 +1,6 @@
 from app.schemas.analytics import (
+    AnalyticsRegionalData,
+    AnalyticsRegionalResponse,
     AnalyticsTrendBucket,
     AnalyticsTrendData,
     AnalyticsTrendResponse,
@@ -6,6 +8,7 @@ from app.schemas.analytics import (
     DashboardSummaryData,
     DashboardSummaryResponse,
     DiurnalDistributionItem,
+    RegionalDistributionItem,
     SeverityBreakdown,
     VerificationBreakdown,
 )
@@ -72,6 +75,8 @@ from app.schemas.report import (
 )
 
 __all__ = [
+    "AnalyticsRegionalData",
+    "AnalyticsRegionalResponse",
     "AnalyticsTrendBucket",
     "AnalyticsTrendData",
     "AnalyticsTrendResponse",
@@ -82,6 +87,7 @@ __all__ = [
     "DashboardSummaryData",
     "DashboardSummaryResponse",
     "DiurnalDistributionItem",
+    "RegionalDistributionItem",
     "GeoJSONFeatureCollection",
     "GeoJSONIncidentFeature",
     "GeoJSONIncidentProperties",

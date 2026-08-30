@@ -27,11 +27,13 @@ from app.models.report import WeatherReport
 from app.orchestration.events import OverallReadiness
 from app.orchestration.state import load_orchestration_state
 from app.schemas.analytics import (
+    AnalyticsRegionalData,
     AnalyticsTrendBucket,
     AnalyticsTrendData,
     CategoryDistributionItem,
     DashboardSummaryData,
     DiurnalDistributionItem,
+    RegionalDistributionItem,
     SeverityBreakdown,
     VerificationBreakdown,
 )
@@ -1379,6 +1381,176 @@ class IncidentQueryService:
             time_range=tr,
             interval=effective_interval,
             buckets=buckets,
+        )
+
+    async def get_regional_distribution(
+        self,
+        session: AsyncSession,
+        time_range: str = "7d",
+        category: Optional[str] = None,
+        severity: Optional[str] = None,
+        verification_status: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+    ) -> AnalyticsRegionalData:
+        """Aggregate report counts by geographical region using token matching
+        and spatial envelope containment.
+
+        Classification Order (Deterministic & Collision-Free):
+        1. Token/phrase regex matching on location_name for major urban centers & states.
+        2. Spatial Point-in-Polygon containment (via ST_Contains & ST_MakeEnvelope).
+           - Small metro envelopes (DL) evaluated before larger parent envelopes (RJ).
+        3. Fallback to 'OTHER' for unmatched areas.
+        """
+        tr = time_range.strip().lower() if time_range else "7d"
+        eff_from = self._parse_time_range(tr, from_date)
+
+        where_filters = self._build_aggregation_filters(
+            category=category,
+            severity=severity,
+            verification_status=verification_status,
+            from_date=eff_from,
+            to_date=to_date,
+            bbox=bbox,
+        )
+
+        region_names: Dict[str, str] = {
+            "MH": "Maharashtra",
+            "TN": "Tamil Nadu",
+            "DL": "Delhi NCR",
+            "KA": "Karnataka",
+            "KL": "Kerala",
+            "AS": "Assam",
+            "RJ": "Rajasthan",
+            "OTHER": "Other Regions",
+        }
+
+        # Case expression for deterministic regional categorization
+        region_case = case(
+            # 1. Word-boundary token matching on location_name
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(mumbai|pune|nagpur|thane|nashik|maharashtra|kurla|andheri|navi mumbai)\y"
+                ),
+                "MH",
+            ),
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(chennai|coimbatore|madurai|tamil nadu|trichy|salem)\y"
+                ),
+                "TN",
+            ),
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(delhi|new delhi|noida|gurgaon|gurugram|faridabad|ghaziabad|ncr)\y"
+                ),
+                "DL",
+            ),
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(bengaluru|bangalore|mysore|karnataka|hubli|mangalore)\y"
+                ),
+                "KA",
+            ),
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(kochi|thiruvananthapuram|calicut|kerala|trivandrum|thrissur)\y"
+                ),
+                "KL",
+            ),
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(guwahati|assam|dibrugarh|silchar|jorhat|dispur)\y"
+                ),
+                "AS",
+            ),
+            (
+                WeatherReport.location_name.op("~*")(
+                    r"\y(jaipur|jodhpur|rajasthan|udaipur|kota|bikaner)\y"
+                ),
+                "RJ",
+            ),
+            # 2. Spatial bounding box containment (DL checked before RJ to avoid parent containment)
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(76.8, 28.4, 77.4, 28.9, 4326), WeatherReport.geom
+                ),
+                "DL",
+            ),
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(72.6, 15.6, 80.9, 22.0, 4326), WeatherReport.geom
+                ),
+                "MH",
+            ),
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(76.2, 8.0, 80.3, 13.5, 4326), WeatherReport.geom
+                ),
+                "TN",
+            ),
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(74.0, 11.5, 78.6, 18.5, 4326), WeatherReport.geom
+                ),
+                "KA",
+            ),
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(74.8, 8.3, 77.4, 12.8, 4326), WeatherReport.geom
+                ),
+                "KL",
+            ),
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(89.7, 24.1, 96.0, 28.2, 4326), WeatherReport.geom
+                ),
+                "AS",
+            ),
+            (
+                func.ST_Contains(
+                    func.ST_MakeEnvelope(69.5, 23.0, 78.3, 30.2, 4326), WeatherReport.geom
+                ),
+                "RJ",
+            ),
+            else_="OTHER",
+        ).label("region_code")
+
+        stmt = select(
+            region_case,
+            func.count(WeatherReport.id).label("region_count"),
+        )
+        if where_filters:
+            stmt = stmt.where(and_(*where_filters))
+        stmt = stmt.group_by(region_case).order_by(
+            func.count(WeatherReport.id).desc(),
+            region_case.asc(),
+        )
+
+        res = await session.execute(stmt)
+        rows = res.all()
+
+        total_classified = sum(int(r.region_count or 0) for r in rows)
+
+        regions: List[RegionalDistributionItem] = []
+        for r in rows:
+            code = str(r.region_code)
+            count = int(r.region_count or 0)
+            pct = round((count / total_classified) * 100) if total_classified > 0 else 0
+            regions.append(
+                RegionalDistributionItem(
+                    region_code=code,
+                    region_name=region_names.get(code, code),
+                    count=count,
+                    percentage=pct,
+                )
+            )
+
+        return AnalyticsRegionalData(
+            time_range=tr,
+            total_classified=total_classified,
+            regions=regions,
         )
 
 

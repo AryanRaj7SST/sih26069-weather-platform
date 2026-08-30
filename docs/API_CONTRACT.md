@@ -205,3 +205,39 @@
   }
   ```
 - **Response Shape** (`200 OK`): Updated incident with `verification_status = "UNDER_REVIEW"`.
+
+---
+
+## 6. Real-Time Analytics & Dashboard Aggregation Endpoints
+
+#### 14. Dashboard Summary Metrics
+- **Method & Path**: `GET /api/v1/dashboard/summary`
+- **Purpose**: SQL-aggregated macro KPIs, diurnal distribution, category distribution, severity breakdown, and verification rates.
+- **Query Parameters**:
+  - `time_range`: `24h`, `48h`, `7d`, `30d`, `all` (default: `24h`)
+  - `category`: Filter by event category code (optional)
+  - `severity`: `LOW`, `MODERATE`, `HIGH`, `SEVERE`, `ALL` (optional)
+  - `status`: Verification status filter (optional)
+  - `bbox`: `min_lon,min_lat,max_lon,max_lat` (optional)
+
+#### 15. Activity Trends Progression
+- **Method & Path**: `GET /api/v1/analytics/trends`
+- **Purpose**: Time-series bucketed volume and verification progression across diurnal and daily windows.
+- **Query Parameters**:
+  - `time_range`: `24h`, `7d`, `30d`, `all` (default: `7d`)
+  - `interval`: `hour`, `day` (optional)
+  - `category`: Filter by event category code (optional)
+  - `severity`: Severity filter (optional)
+  - `status`: Verification status filter (optional)
+  - `bbox`: Bounding box (optional)
+
+#### 16. Regional Demographic Distribution
+- **Method & Path**: `GET /api/v1/analytics/regional`
+- **Purpose**: SQL-aggregated regional distribution across urban clusters and state spatial envelopes.
+- **Query Parameters**:
+  - `time_range`: `24h`, `7d`, `30d`, `all` (default: `7d`)
+  - `category`: Filter by event category code (optional)
+  - `severity`: Severity filter (optional)
+  - `status`: Verification status filter (optional)
+  - `bbox`: Bounding box (optional)
+

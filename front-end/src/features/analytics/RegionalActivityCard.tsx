@@ -1,68 +1,21 @@
-import React, { useMemo } from 'react';
-import { ReportDetailData } from '@/types';
-import { GEOGRAPHY_OPTIONS } from './constants';
+import React from 'react';
+import { AnalyticsRegionalData, RegionalDistributionItem, ReportDetailData } from '@/types';
 
 interface RegionalActivityCardProps {
-  reports: ReportDetailData[];
+  regionalData?: AnalyticsRegionalData;
+  regions?: RegionalDistributionItem[];
+  reports?: ReportDetailData[]; // compatibility fallback
   isLoading: boolean;
 }
 
 export const RegionalActivityCard: React.FC<RegionalActivityCardProps> = ({
-  reports,
+  regionalData,
+  regions: propRegions,
   isLoading,
 }) => {
-  const regionStats = useMemo(() => {
-    const counts: Record<string, { label: string; count: number }> = {};
-
-    // Initialize states from GEOGRAPHY_OPTIONS (excluding ALL)
-    for (const [code, opt] of Object.entries(GEOGRAPHY_OPTIONS)) {
-      if (code !== 'ALL') {
-        counts[code] = { label: opt.label, count: 0 };
-      }
-    }
-    counts['OTHER'] = { label: 'Other Regions', count: 0 };
-
-    for (const r of reports) {
-      const locName = (r.location?.name || '').toLowerCase();
-      const lat = r.location?.latitude;
-      const lon = r.location?.longitude;
-      let matchedCode: string | null = null;
-
-      // 1. Match against region keywords
-      for (const [code, opt] of Object.entries(GEOGRAPHY_OPTIONS)) {
-        if (code !== 'ALL' && opt.keywords) {
-          if (opt.keywords.some((kw) => locName.includes(kw))) {
-            matchedCode = code;
-            break;
-          }
-        }
-      }
-
-      // 2. Spatial bounding box fallback if coordinates available
-      if (!matchedCode && lat !== undefined && lon !== undefined) {
-        for (const [code, opt] of Object.entries(GEOGRAPHY_OPTIONS)) {
-          if (code !== 'ALL' && opt.bbox) {
-            const [minLon, minLat, maxLon, maxLat] = opt.bbox.split(',').map(Number);
-            if (lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat) {
-              matchedCode = code;
-              break;
-            }
-          }
-        }
-      }
-
-      if (matchedCode && counts[matchedCode]) {
-        counts[matchedCode].count++;
-      } else {
-        counts['OTHER'].count++;
-      }
-    }
-
-    return Object.values(counts)
-      .filter((item) => item.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [reports]);
+  // Directly consume server-provided ranked regions (top 5 displayed)
+  const items = propRegions || regionalData?.regions || [];
+  const displayStats = items.slice(0, 5);
 
   if (isLoading) {
     return (
@@ -84,21 +37,28 @@ export const RegionalActivityCard: React.FC<RegionalActivityCardProps> = ({
           Regional Activity
         </h2>
         <span className="text-[11px] font-medium text-slate-400">
-          Derived from spatial bounds
+          Derived from location & spatial classification
         </span>
       </div>
 
-      {regionStats.length > 0 ? (
+      {displayStats.length > 0 ? (
         <div className="divide-y divide-slate-100">
-          {regionStats.map((item) => (
+          {displayStats.map((item) => (
             <div
-              key={item.label}
+              key={item.region_code}
               className="flex items-center justify-between py-3 text-xs font-semibold text-slate-700"
             >
-              <span>{item.label}</span>
-              <span className="inline-flex items-center rounded-lg bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-700">
-                {item.count}
-              </span>
+              <span>{item.region_name}</span>
+              <div className="flex items-center space-x-2">
+                {item.percentage !== undefined && item.percentage > 0 && (
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {item.percentage}%
+                  </span>
+                )}
+                <span className="inline-flex items-center rounded-lg bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-700">
+                  {item.count}
+                </span>
+              </div>
             </div>
           ))}
         </div>
