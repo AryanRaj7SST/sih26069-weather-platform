@@ -16,8 +16,10 @@ import {
   ObservedPatternsCard,
   GEOGRAPHY_OPTIONS,
 } from '@/features/analytics';
+import { analyticsApi } from '@/services/analyticsApi';
 import { fetchAllDashboardReports } from '@/services/reportApi';
-import { ReportListQueryParams } from '@/types';
+import { analyticsKeys } from '@/lib/queryKeys';
+import { AnalyticsTrendQueryParams, ReportListQueryParams } from '@/types';
 import { BarChart3, Filter, AlertCircle } from 'lucide-react';
 
 export const AnalyticsPage: React.FC = () => {
@@ -32,7 +34,44 @@ export const AnalyticsPage: React.FC = () => {
   const [tempFilters, setTempFilters] = useState<AnalyticsFilterState>(filters);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Compute API query params from active filters
+  // Compute server-aggregated trend parameters
+  const trendParams = useMemo<AnalyticsTrendQueryParams>(() => {
+    const params: AnalyticsTrendQueryParams = {};
+
+    if (filters.timeRange) {
+      params.time_range = filters.timeRange;
+    }
+    if (filters.category !== 'ALL') {
+      params.category = filters.category;
+    }
+    if (filters.severity !== 'ALL') {
+      params.severity = filters.severity;
+    }
+    if (filters.status !== 'ALL') {
+      params.status = filters.status;
+    }
+    if (filters.region !== 'ALL' && GEOGRAPHY_OPTIONS[filters.region]?.bbox) {
+      params.bbox = GEOGRAPHY_OPTIONS[filters.region].bbox;
+    }
+
+    return params;
+  }, [filters]);
+
+  // Fetch server-side activity trends via analyticsApi
+  const {
+    data: trendResponse,
+    isLoading: isTrendLoading,
+    isError: isTrendError,
+    error: trendError,
+  } = useQuery({
+    queryKey: analyticsKeys.trends(trendParams as Record<string, unknown>),
+    queryFn: ({ signal }) => analyticsApi.getTrends(trendParams, signal),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  const trendData = trendResponse?.data;
+
+  // Compute API query params for raw report consumers (KPIs, tables, non-trend cards)
   const queryParams = useMemo<ReportListQueryParams>(() => {
     const params: ReportListQueryParams = {};
 
@@ -69,8 +108,14 @@ export const AnalyticsPage: React.FC = () => {
     return params;
   }, [filters]);
 
-  // Fetch all matching reports across pages
-  const { data: response, isLoading, isError, error, isFetching } = useQuery({
+  // Fetch raw reports for non-trend components
+  const {
+    data: response,
+    isLoading: isRawLoading,
+    isError: isRawError,
+    error: rawError,
+    isFetching,
+  } = useQuery({
     queryKey: ['analytics-reports', queryParams],
     queryFn: () => fetchAllDashboardReports(queryParams),
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -96,6 +141,9 @@ export const AnalyticsPage: React.FC = () => {
     setFilters(defaultState);
     setMobileFilterOpen(false);
   };
+
+  const isAnyError = isRawError || isTrendError;
+  const activeError = rawError || trendError;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
@@ -133,11 +181,11 @@ export const AnalyticsPage: React.FC = () => {
           </div>
 
           {/* Error Banner */}
-          {isError && (
+          {isAnyError && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800 flex items-center space-x-2">
               <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
               <span>
-                Failed to load analytics data: {error instanceof Error ? error.message : 'Unknown error'}
+                Failed to load analytics data: {activeError instanceof Error ? activeError.message : 'Unknown error'}
               </span>
             </div>
           )}
@@ -159,50 +207,51 @@ export const AnalyticsPage: React.FC = () => {
             reports={reports}
             pagination={pagination}
             timeRange={filters.timeRange}
-            isLoading={isLoading}
+            isLoading={isRawLoading}
           />
 
-          {/* 2. Main Activity Chart */}
+          {/* 2. Main Activity Chart (Migrated to server-side analyticsApi.getTrends) */}
           <ReportActivityChart
+            trendData={trendData}
             reports={reports}
             timeRange={filters.timeRange}
-            isLoading={isLoading}
+            isLoading={isTrendLoading}
           />
 
           {/* 3. 2-Column Grid: Event & Severity Distribution */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <EventDistributionCard
               reports={reports}
-              isLoading={isLoading}
+              isLoading={isRawLoading}
             />
             <SeverityDistributionCard
               reports={reports}
-              isLoading={isLoading}
+              isLoading={isRawLoading}
             />
           </div>
 
           {/* 4. Recent Reports Table */}
           <RecentReportsTable
             reports={reports}
-            isLoading={isLoading}
+            isLoading={isRawLoading}
           />
 
           {/* 5. 2-Column Grid: Verification Status & Regional Activity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <VerificationStatusCard
               reports={reports}
-              isLoading={isLoading}
+              isLoading={isRawLoading}
             />
             <RegionalActivityCard
               reports={reports}
-              isLoading={isLoading}
+              isLoading={isRawLoading}
             />
           </div>
 
           {/* 6. Observed Patterns Banner */}
           <ObservedPatternsCard
             reports={reports}
-            isLoading={isLoading}
+            isLoading={isRawLoading}
           />
         </div>
       </main>

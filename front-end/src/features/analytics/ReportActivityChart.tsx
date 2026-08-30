@@ -8,21 +8,34 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { ReportDetailData } from '@/types';
+import { AnalyticsTrendData, ReportDetailData } from '@/types';
 import { Activity } from 'lucide-react';
 
 interface ReportActivityChartProps {
-  reports: ReportDetailData[];
+  trendData?: AnalyticsTrendData;
+  reports?: ReportDetailData[];
   timeRange: string;
   isLoading: boolean;
 }
 
 export const ReportActivityChart: React.FC<ReportActivityChartProps> = ({
-  reports,
+  trendData,
+  reports = [],
   timeRange,
   isLoading,
 }) => {
   const chartData = useMemo(() => {
+    // 1. Authoritative server-side trend aggregation
+    if (trendData && trendData.buckets && trendData.buckets.length > 0) {
+      return trendData.buckets.map((b) => ({
+        time: trendData.time_range === '24h' ? b.bucket : b.label,
+        label: b.label,
+        total: b.total,
+        verified: b.verified,
+      }));
+    }
+
+    // 2. Legacy client-side calculation fallback
     if (reports.length === 0) return [];
 
     const now = new Date();
@@ -86,7 +99,6 @@ export const ReportActivityChart: React.FC<ReportActivityChartProps> = ({
         daysMap[dateKey].total++;
         if (isVerified) daysMap[dateKey].verified++;
       } else {
-        // Fallback for days outside generated map
         const d = new Date(r.occurred_at || r.created_at);
         const shortDay = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
         daysMap[dateKey] = {
@@ -99,7 +111,11 @@ export const ReportActivityChart: React.FC<ReportActivityChartProps> = ({
     }
 
     return Object.values(daysMap);
-  }, [reports, timeRange]);
+  }, [trendData, reports, timeRange]);
+
+  const totalAnalyzed = trendData?.buckets
+    ? trendData.buckets.reduce((acc, b) => acc + b.total, 0)
+    : reports.length;
 
   if (isLoading) {
     return (
@@ -119,7 +135,7 @@ export const ReportActivityChart: React.FC<ReportActivityChartProps> = ({
             Report Activity Over Time
           </h2>
           <p className="text-xs text-slate-500">
-            Report volume grouped by time period ({reports.length} total reports analyzed)
+            Report volume grouped by time period ({totalAnalyzed} total reports analyzed)
           </p>
         </div>
 
