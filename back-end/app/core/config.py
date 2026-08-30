@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     REALTIME_STREAM_NAME: str = "stream:weather:realtime"
     REALTIME_STREAM_MAXLEN: int = 10000
 
+    # Realtime Outbox Worker Configuration
+    OUTBOX_WORKER_ENABLED: bool = True
+    OUTBOX_WORKER_POLL_INTERVAL_SECONDS: float = 1.0
+    OUTBOX_WORKER_BATCH_SIZE: int = 50
+    OUTBOX_WORKER_MAX_ATTEMPTS: int = 5
+    OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS: int = 3600
+    OUTBOX_WORKER_RETENTION_HOURS: int = 72
+
     # Object Storage (MinIO / S3)
     S3_ENDPOINT_URL: str = "http://localhost:9000"
     S3_ACCESS_KEY_ID: str = "minioadmin"

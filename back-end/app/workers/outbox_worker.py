@@ -4,8 +4,7 @@ Consumes pending events from the PostgreSQL `realtime_outbox` table using
 concurrency-safe row locking (`SKIP LOCKED`) and delivers them to Redis Streams.
 """
 
-from __future__ import annotations
-
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -193,6 +192,101 @@ class RealtimeOutboxWorker:
         if deleted_count > 0:
             logger.info("Pruned %d published outbox records older than %s", deleted_count, cutoff)
         return deleted_count
+
+    async def run_loop(
+        self,
+        poll_interval: Optional[float] = None,
+        batch_size: Optional[int] = None,
+        prune_interval: Optional[int] = None,
+        retention_hours: Optional[int] = None,
+        stop_event: Optional[asyncio.Event] = None,
+    ) -> None:
+        """Run the continuous outbox worker processing and periodic pruning loop."""
+        interval = (
+            poll_interval
+            if poll_interval is not None
+            else settings.OUTBOX_WORKER_POLL_INTERVAL_SECONDS
+        )
+        batch = batch_size if batch_size is not None else settings.OUTBOX_WORKER_BATCH_SIZE
+        prune_sec = (
+            prune_interval
+            if prune_interval is not None
+            else settings.OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS
+        )
+        retention = (
+            retention_hours
+            if retention_hours is not None
+            else settings.OUTBOX_WORKER_RETENTION_HOURS
+        )
+
+        if not settings.OUTBOX_WORKER_ENABLED:
+            logger.info(
+                "RealtimeOutboxWorker is disabled by configuration "
+                "(OUTBOX_WORKER_ENABLED=false); exiting loop"
+            )
+            return
+
+        logger.info(
+            "Starting RealtimeOutboxWorker loop "
+            "(poll_interval=%.2fs, batch_size=%d, prune_interval=%ds, retention=%dh)",
+            interval,
+            batch,
+            prune_sec,
+            retention,
+        )
+
+        last_prune_time = datetime.now(timezone.utc)
+
+        while stop_event is None or not stop_event.is_set():
+            try:
+                # 1. Periodic pruning of historical published events
+                now = datetime.now(timezone.utc)
+                if (now - last_prune_time).total_seconds() >= prune_sec:
+                    async with self.session_factory() as session:
+                        await self.prune_published_events(session, retention_hours=retention)
+                    last_prune_time = now
+
+                # 2. Process batch of pending outbox rows
+                async with self.session_factory() as session:
+                    published_count, failed_count = await self.publish_pending_batch(
+                        session=session,
+                        batch_size=batch,
+                    )
+
+                # 3. If work was done, immediately continue to next iteration to drain backlog
+                if published_count > 0:
+                    continue
+
+                # 4. If no work was done, wait for poll_interval or stop_event
+                if stop_event is not None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(interval)
+
+            except asyncio.CancelledError:
+                logger.info("RealtimeOutboxWorker loop received cancellation signal")
+                break
+            except Exception as e:
+                logger.error(
+                    "Unexpected error in RealtimeOutboxWorker loop; sleeping %.2fs: %s",
+                    interval,
+                    e,
+                    exc_info=True,
+                )
+                if stop_event is not None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(interval)
+
+        logger.info("RealtimeOutboxWorker loop stopped cleanly")
 
 
 outbox_worker = RealtimeOutboxWorker()
