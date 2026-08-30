@@ -9,8 +9,13 @@ import { QueueTable } from '@/features/admin/QueueTable';
 import { QueueMobileList } from '@/features/admin/QueueMobileList';
 import { ReviewReportDrawer } from '@/features/admin/ReviewReportDrawer';
 import { fetchReportList } from '@/services/reportApi';
-import { ReportDetailData, ReportListQueryParams } from '@/types';
-import { incidentKeys } from '@/lib/queryKeys';
+import { dashboardApi } from '@/services/dashboardApi';
+import {
+  DashboardSummaryQueryParams,
+  ReportDetailData,
+  ReportListQueryParams,
+} from '@/types';
+import { incidentKeys, dashboardKeys, analyticsKeys } from '@/lib/queryKeys';
 import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
 
 export const AdminVerificationQueuePage: React.FC = () => {
@@ -53,10 +58,34 @@ export const AdminVerificationQueuePage: React.FC = () => {
     return params;
   }, [filters.status, filters.category, filters.severity, page]);
 
-  // Fetch report list from backend
+  // Fetch report list from backend for table & mobile cards
   const { data: response, isLoading } = useQuery({
     queryKey: ['admin-queue-reports', queryParams],
     queryFn: () => fetchReportList(queryParams),
+    staleTime: 1000 * 30, // 30 seconds
+  });
+
+  // Summary parameters for authoritative queue-wide KPI metrics
+  const summaryParams: DashboardSummaryQueryParams = useMemo(() => {
+    const params: DashboardSummaryQueryParams = {
+      time_range: 'all',
+    };
+
+    if (filters.category !== 'ALL') {
+      params.category = filters.category;
+    }
+
+    if (filters.severity !== 'ALL') {
+      params.severity = filters.severity;
+    }
+
+    return params;
+  }, [filters.category, filters.severity]);
+
+  // Fetch server-side aggregated summary for Queue KPI cards
+  const { data: summaryResponse, isLoading: isSummaryLoading } = useQuery({
+    queryKey: dashboardKeys.summary(summaryParams as Record<string, unknown>),
+    queryFn: ({ signal }) => dashboardApi.getSummary(summaryParams, signal),
     staleTime: 1000 * 30, // 30 seconds
   });
 
@@ -111,13 +140,16 @@ export const AdminVerificationQueuePage: React.FC = () => {
   };
 
   const handleActionComplete = () => {
-    // Invalidate prefix queries so all queue filters, lists, and details refresh automatically
+    // Invalidate prefix queries so all queue filters, lists, details, dashboard, and analytics refresh automatically
     queryClient.invalidateQueries({ queryKey: incidentKeys.verificationQueues() });
     queryClient.invalidateQueries({ queryKey: incidentKeys.lists() });
     queryClient.invalidateQueries({ queryKey: incidentKeys.geoAll() });
     queryClient.invalidateQueries({ queryKey: incidentKeys.details() });
+    queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+    queryClient.invalidateQueries({ queryKey: analyticsKeys.all });
     queryClient.invalidateQueries({ queryKey: ['admin-queue-reports'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard-reports'] });
+    queryClient.invalidateQueries({ queryKey: ['live-map-reports'] });
     queryClient.invalidateQueries({ queryKey: ['reports'] });
     setSelectedReport(null);
   };
@@ -148,8 +180,8 @@ export const AdminVerificationQueuePage: React.FC = () => {
           {/* KPI Summary Cards */}
           <div className="mt-6">
             <QueueKpiCards
-              reports={response?.data || []}
-              isLoading={isLoading}
+              summary={summaryResponse?.data}
+              isLoading={isSummaryLoading}
             />
           </div>
 

@@ -1,38 +1,34 @@
 import React, { useMemo } from 'react';
 import { Clock, AlertTriangle, AlertCircle, Copy } from 'lucide-react';
-import { ReportDetailData } from '@/types';
+import { DashboardSummaryData } from '@/types';
 
 interface QueueKpiCardsProps {
-  reports: ReportDetailData[];
+  summary?: DashboardSummaryData | null;
   isLoading: boolean;
 }
 
-export const QueueKpiCards: React.FC<QueueKpiCardsProps> = ({ reports, isLoading }) => {
+export const QueueKpiCards: React.FC<QueueKpiCardsProps> = ({ summary, isLoading }) => {
   const counts = useMemo(() => {
-    let pending = 0;
-    let underReview = 0;
-    let highPriority = 0;
-    let duplicates = 0;
-
-    for (const r of reports) {
-      if (r.verification_status === 'PENDING') {
-        pending++;
-      } else if (r.verification_status === 'UNDER_REVIEW') {
-        underReview++;
-      } else if (r.verification_status === 'DUPLICATE') {
-        duplicates++;
-      }
-
-      if (
-        (r.severity === 'HIGH' || r.severity === 'SEVERE') &&
-        (r.verification_status === 'PENDING' || r.verification_status === 'UNDER_REVIEW')
-      ) {
-        highPriority++;
-      }
+    if (!summary?.verification) {
+      return {
+        pending: 0,
+        underReview: 0,
+        highPriority: 0,
+        duplicates: 0,
+      };
     }
 
+    // Strict PENDING: total active backlog minus those already claimed/under review
+    const pending = Math.max(
+      0,
+      (summary.verification.pending_count || 0) - (summary.verification.under_review_count || 0)
+    );
+    const underReview = summary.verification.under_review_count || 0;
+    const highPriority = summary.severity?.severe_high_count || 0;
+    const duplicates = summary.verification.duplicate_count || 0;
+
     return { pending, underReview, highPriority, duplicates };
-  }, [reports]);
+  }, [summary]);
 
   if (isLoading) {
     return (
@@ -62,7 +58,7 @@ export const QueueKpiCards: React.FC<QueueKpiCardsProps> = ({ reports, isLoading
             <Clock className="h-4 w-4 text-blue-600" />
           </div>
           <div className="mt-3 text-3xl font-extrabold text-blue-600">
-            {counts.pending}
+            {counts.pending.toLocaleString()}
           </div>
         </div>
         <p className="mt-2 text-[11px] text-slate-400 font-medium">
@@ -80,7 +76,7 @@ export const QueueKpiCards: React.FC<QueueKpiCardsProps> = ({ reports, isLoading
             <AlertCircle className="h-4 w-4 text-emerald-600" />
           </div>
           <div className="mt-3 text-3xl font-extrabold text-emerald-600">
-            {counts.underReview}
+            {counts.underReview.toLocaleString()}
           </div>
         </div>
         <p className="mt-2 text-[11px] text-slate-400 font-medium">
@@ -98,7 +94,7 @@ export const QueueKpiCards: React.FC<QueueKpiCardsProps> = ({ reports, isLoading
             <AlertTriangle className="h-4 w-4 text-amber-500" />
           </div>
           <div className="mt-3 text-3xl font-extrabold text-amber-600">
-            {counts.highPriority}
+            {counts.highPriority.toLocaleString()}
           </div>
         </div>
         <p className="mt-2 text-[11px] text-slate-400 font-medium">
@@ -116,7 +112,7 @@ export const QueueKpiCards: React.FC<QueueKpiCardsProps> = ({ reports, isLoading
             <Copy className="h-4 w-4 text-slate-400" />
           </div>
           <div className="mt-3 text-3xl font-extrabold text-slate-700">
-            {counts.duplicates}
+            {counts.duplicates.toLocaleString()}
           </div>
         </div>
         <p className="mt-2 text-[11px] text-slate-400 font-medium">
