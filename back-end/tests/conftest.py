@@ -1,10 +1,12 @@
 """Shared pytest fixtures for the weather platform test suite."""
 
 import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.main import app
 
 
 @pytest_asyncio.fixture
@@ -23,3 +25,11 @@ async def db_session():
         yield session
 
     await test_engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def api_client():
+    """Async HTTP test client bound to FastAPI application."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client

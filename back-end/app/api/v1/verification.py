@@ -20,7 +20,7 @@ from app.schemas.report import (
     ReportVerifyRequest,
 )
 from app.services.incident_query_service import ID_PATTERN, incident_query_service
-from app.services.report_service import report_service
+from app.services.report_service import InvalidStateTransitionError, report_service
 
 router = APIRouter()
 
@@ -106,6 +106,20 @@ async def verify_incident(
             notes=payload.notes if payload else None,
             action_metadata={"broadcast_alert": payload.broadcast_alert} if payload else None,
         )
+    except InvalidStateTransitionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_STATE_TRANSITION",
+                "message": e.message,
+                "details": [
+                    {
+                        "current_status": e.current_status,
+                        "target_status": e.target_status,
+                    }
+                ],
+            },
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -165,6 +179,20 @@ async def reject_incident(
             new_status="REJECTED",
             notes=payload.notes if payload else None,
             action_metadata={"rejection_reason": payload.rejection_reason} if payload else None,
+        )
+    except InvalidStateTransitionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_STATE_TRANSITION",
+                "message": e.message,
+                "details": [
+                    {
+                        "current_status": e.current_status,
+                        "target_status": e.target_status,
+                    }
+                ],
+            },
         )
     except ValueError:
         raise HTTPException(
@@ -226,6 +254,20 @@ async def mark_duplicate_incident(
             notes=payload.notes if payload else None,
             action_metadata={"primary_report_id": payload.primary_report_id} if payload else None,
         )
+    except InvalidStateTransitionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_STATE_TRANSITION",
+                "message": e.message,
+                "details": [
+                    {
+                        "current_status": e.current_status,
+                        "target_status": e.target_status,
+                    }
+                ],
+            },
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -284,6 +326,20 @@ async def review_incident(
             report_id_or_tracking=clean_id,
             new_status="UNDER_REVIEW",
             notes=payload.notes if payload else None,
+        )
+    except InvalidStateTransitionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_STATE_TRANSITION",
+                "message": e.message,
+                "details": [
+                    {
+                        "current_status": e.current_status,
+                        "target_status": e.target_status,
+                    }
+                ],
+            },
         )
     except ValueError:
         raise HTTPException(

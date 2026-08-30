@@ -22,6 +22,32 @@ from app.schemas.report import CitizenReportCreate
 from app.services.storage import StorageService, storage_service
 
 
+class InvalidStateTransitionError(Exception):
+    """Raised when an invalid verification status transition is attempted."""
+
+    def __init__(
+        self,
+        current_status: str,
+        target_status: str,
+        message: Optional[str] = None,
+    ) -> None:
+        self.current_status = current_status
+        self.target_status = target_status
+        self.message = message or (
+            f"Invalid verification state transition from '{current_status}' to '{target_status}'."
+        )
+        super().__init__(self.message)
+
+
+ALLOWED_VERIFICATION_TRANSITIONS: Dict[str, set[str]] = {
+    "PENDING": {"UNDER_REVIEW", "VERIFIED", "REJECTED", "DUPLICATE"},
+    "UNDER_REVIEW": {"VERIFIED", "REJECTED", "DUPLICATE"},
+    "VERIFIED": set(),
+    "REJECTED": set(),
+    "DUPLICATE": set(),
+}
+
+
 class ReportService:
     """Business logic service for citizen weather reports."""
 
@@ -317,8 +343,29 @@ class ReportService:
         if report is None:
             raise ValueError(f"Report not found: {report_id_or_tracking}")
 
-        previous_status = report.verification_status
-        clean_status = new_status.upper()
+        previous_status = (report.verification_status or "PENDING").upper()
+        clean_status = new_status.strip().upper()
+
+        allowed_targets = ALLOWED_VERIFICATION_TRANSITIONS.get(previous_status, set())
+        if clean_status not in allowed_targets:
+            if not allowed_targets:
+                msg = (
+                    f"Cannot transition report from terminal state '{previous_status}' "
+                    f"to '{clean_status}'. Terminal verification states "
+                    "(VERIFIED, REJECTED, DUPLICATE) cannot be modified."
+                )
+            else:
+                targets_str = ", ".join(sorted(allowed_targets))
+                msg = (
+                    f"Cannot transition report from '{previous_status}' to '{clean_status}'. "
+                    f"Allowed transitions from '{previous_status}' are: {targets_str}."
+                )
+            raise InvalidStateTransitionError(
+                current_status=previous_status,
+                target_status=clean_status,
+                message=msg,
+            )
+
         report.verification_status = clean_status
 
         if clean_status == "VERIFIED":

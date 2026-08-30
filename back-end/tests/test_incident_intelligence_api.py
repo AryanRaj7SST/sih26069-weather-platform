@@ -769,7 +769,7 @@ async def test_verify_and_reject_incident_creates_audit_events(
     db_session.add(report)
     await db_session.commit()
 
-    # 1. Verify
+    # 1. Verify Report 1
     ver_res = await api_client.post(
         f"/api/v1/verification/{report.id}/verify",
         json={"notes": "Confirmed on ground with Ward disaster team.", "broadcast_alert": True},
@@ -780,15 +780,42 @@ async def test_verify_and_reject_incident_creates_audit_events(
     assert len(ver_data["verification_history"]) == 1
     assert "Confirmed on ground" in ver_data["verification_history"][0]["notes"]
 
-    # 2. Reject
-    rej_res = await api_client.post(
+    # 2. Attempt to reject already verified Report 1 (Must be blocked by state machine)
+    invalid_rej_res = await api_client.post(
         f"/api/v1/verification/{report.id}/reject",
+        json={"rejection_reason": "OUTDATED_ARCHIVE", "notes": "Image is from 2021."},
+    )
+    assert invalid_rej_res.status_code == 400
+    err_body = invalid_rej_res.json()
+    assert err_body["success"] is False
+    assert err_body["error"]["code"] == "INVALID_STATE_TRANSITION"
+
+    # 3. Create Report 2 and test valid direct rejection
+    report2 = WeatherReport(
+        tracking_id=f"RPT-OP-REJ-{uid}",
+        source_id=source.id,
+        title="Reject Target Test Incident",
+        reported_category="CYCLONE_STORM",
+        severity="HIGH",
+        latitude=19.0760,
+        longitude=72.8777,
+        occurred_at=datetime.now(timezone.utc),
+        geom="SRID=4326;POINT(72.8777 19.0760)",
+        processing_status="COMPLETED",
+        verification_status="PENDING",
+        credibility_score=0.4000,
+    )
+    db_session.add(report2)
+    await db_session.commit()
+
+    rej_res = await api_client.post(
+        f"/api/v1/verification/{report2.id}/reject",
         json={"rejection_reason": "OUTDATED_ARCHIVE", "notes": "Image is from 2021."},
     )
     assert rej_res.status_code == 200
     rej_data = rej_res.json()["data"]
     assert rej_data["verification"]["status"] == "REJECTED"
-    assert len(rej_data["verification_history"]) == 2
+    assert len(rej_data["verification_history"]) == 1
 
 
 @pytest.mark.asyncio
