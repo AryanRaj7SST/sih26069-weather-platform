@@ -1,11 +1,11 @@
 # External Services, Credentials & Configuration Guide
 
 **Platform**: National Weather Big Data Analytics Platform (`SIH26069`)
-**Status**: **FROZEN FOR SIH/MVP SCOPE**
+**Status**: **SYNCHRONIZED WITH CURRENT CODE & WORKER TOPOLOGY**
 
 ---
 
-## 1. Automated Local Setup vs. Production Cloud Actions
+## 1. Local Automated Setup vs. Deferred Cloud Actions
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -14,7 +14,8 @@
 │  - Local Redis 7 Container (Port 6379)                      │
 │  - Local MinIO S3 Object Storage (Ports 9000/9001)          │
 │  - Local Alembic Migrations (0001 -> 0004)                  │
-│  - Seed Disaster Data & Weather Observations Telemetry      │
+│  - 6 Standalone Worker Processes                            │
+│  - Deterministic Seed Feeds & IMD/CWC/NDMA Local Adapters   │
 └─────────────────────────────────────────────────────────────┘
                                ▲
                                │ Isolated Boundary
@@ -32,89 +33,88 @@
 
 ---
 
-## 2. Authoritative Configuration Reference
+## 2. External Provider Status & Verification Matrix
 
-All application configuration is managed via Pydantic Settings in [app/core/config.py](file:///Users/akshatjain/Documents/SIH/back-end/app/core/config.py) and populated from `.env` or system environment variables.
-
-### 2.1 Database & Storage Settings
-
-| Variable Name | Required | Default Value | Security Sensitivity | Description |
-| :--- | :---: | :--- | :---: | :--- |
-| `DATABASE_URL` | **Yes** | `postgresql+asyncpg://postgres:postgres@localhost:5432/weather_platform` | **Sensitive** | Asynchronous PostgreSQL + PostGIS connection string |
-| `DATABASE_ECHO` | No | `False` | Low | SQLAlchemy SQL query echo debugging flag |
-| `S3_ENDPOINT_URL` | No | `http://localhost:9000` | Low | S3 / MinIO API endpoint URL |
-| `S3_ACCESS_KEY_ID` | No | `minioadmin` | **Sensitive** | S3 / MinIO access key ID |
-| `S3_SECRET_ACCESS_KEY` | No | `minioadmin` | **Sensitive** | S3 / MinIO secret access key |
-| `S3_BUCKET_NAME` | No | `weather-media` | Low | S3 bucket for citizen incident media |
-| `S3_REGION` | No | `us-east-1` | Low | S3 region identifier |
-| `S3_USE_SSL` | No | `False` | Low | Enable HTTPS for S3 communication |
-
-### 2.2 Redis & Real-Time Event Stream Settings
-
-| Variable Name | Required | Default Value | Security Sensitivity | Description |
-| :--- | :---: | :--- | :---: | :--- |
-| `REDIS_URL` | **Yes** | `redis://localhost:6379/0` | **Sensitive** | Redis connection URI for streams and cache |
-| `REALTIME_STREAM_NAME` | No | `stream:weather:realtime` | Low | Redis Stream topic name for realtime events |
-| `REALTIME_STREAM_MAXLEN` | No | `10000` | Low | Maximum approximate entries in Redis Stream |
-
-### 2.3 Outbox Worker Settings
-
-| Variable Name | Required | Default Value | Security Sensitivity | Description |
-| :--- | :---: | :--- | :---: | :--- |
-| `OUTBOX_WORKER_ENABLED` | No | `True` | Low | Enables/disables outbox worker poll loop |
-| `OUTBOX_WORKER_BATCH_SIZE` | No | `50` | Low | Number of outbox rows claimed per batch |
-| `OUTBOX_WORKER_POLL_INTERVAL_SECONDS` | No | `1.0` | Low | Active polling loop frequency / idle sleep (seconds) |
-| `OUTBOX_WORKER_MAX_ATTEMPTS` | No | `5` | Low | Max delivery attempts before moving to `DEAD_LETTER` |
-| `OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS` | No | `3600` | Low | Interval in seconds between historical prune runs |
-| `OUTBOX_WORKER_RETENTION_HOURS` | No | `72` | Low | Retention window in hours before pruning `PUBLISHED` rows |
-
-### 2.4 API, Security & CORS Settings
-
-| Variable Name | Required | Default Value | Security Sensitivity | Description |
-| :--- | :---: | :--- | :---: | :--- |
-| `ENVIRONMENT` | No | `development` | Low | Environment name (`development`, `production`, `testing`) |
-| `DEBUG` | No | `True` | Low | Debugging and verbose logging mode |
-| `API_V1_STR` | No | `/api/v1` | Low | Base route prefix for API endpoints |
-| `PROJECT_NAME` | No | `"National Weather Big Data Analytics Platform"` | Low | Application name |
-| `SECRET_KEY` | No | `"development-secret-key-change-in-production"` | **Sensitive** | Secret key for cryptographic signing |
-| `ALLOWED_ORIGINS` | No | `["http://localhost:5173","http://localhost:3000"]` | Low | Allowed CORS origins for browser clients |
-| `VITE_API_URL` | No | `http://localhost:8000` | Low | Frontend environment variable pointing to API |
+| Source Provider | Provider Type | Local Simulation / Test | Live Provider Status | Notes |
+| :--- | :--- | :---: | :---: | :--- |
+| **Demo Seed Feed** | Local Synthetic Feed | **Fully Verified** | **Live Local** | Deterministic generator for Mumbai/Delhi/Bengaluru weather incidents. |
+| **IMD Nowcast** | Official Weather Feed | **Fully Verified (Mock)** | Not Live Verified | Ingests IMD AWS/CAP alert format; official API requires IMD credentials. |
+| **NDMA SACHET** | National Disaster Alerts | **Fully Verified (Mock)** | Not Live Verified | Ingests CAP 1.2 XML/JSON alert feeds; production requires NDMA gateway. |
+| **CWC NWDP** | Central Water Commission | **Fully Verified (Mock)** | Not Live Verified | Ingests hydrological river level telemetry; portal uses CKAN datastore. |
+| **GDELT Project** | Global News Feed | **Unit Tested** | **Not Live Verified** | Ingests disaster news; public endpoints are rate-limited / throttled. |
+| **Mastodon** | Social Emergency Feed | **Unit Tested** | **Not Live Verified** | Queries weather hashtags; requires live instance token for high-volume streams. |
 
 ---
 
-## 3. Operations Runbook & Troubleshooting
+## 3. Configuration Reference
 
-### 3.1 Inspecting the Realtime Outbox in PostgreSQL
-```sql
--- Check counts by status
-SELECT status, COUNT(*) FROM realtime_outbox GROUP BY status;
+All application settings are defined in [app/core/config.py](file:///Users/akshatjain/Documents/SIH/back-end/app/core/config.py) and populated from `.env`:
 
--- Inspect failed records
-SELECT id, event_id, event_type, attempts, max_attempts, last_error, created_at
-FROM realtime_outbox
-WHERE status = 'DEAD_LETTER'
-ORDER BY created_at DESC;
-```
+### 3.1 Database & Core Infrastructure
 
-### 3.2 Inspecting Redis Streams
+| Variable Name | Required | Default Value | Description |
+| :--- | :---: | :--- | :--- |
+| `DATABASE_URL` | **Yes** | `postgresql+asyncpg://postgres:postgres@localhost:5432/weather_platform` | Asynchronous PostgreSQL + PostGIS connection URI |
+| `DATABASE_ECHO` | No | `False` | SQLAlchemy SQL statement logging flag |
+| `REDIS_URL` | **Yes** | `redis://localhost:6379/0` | Redis connection URI for streams and caching |
+| `REALTIME_STREAM_NAME` | No | `stream:weather:realtime` | Redis Stream key for browser SSE events |
+| `REALTIME_STREAM_MAXLEN` | No | `10000` | Approximate cap on Redis Stream retention |
+
+### 3.2 Outbox & Worker Settings
+
+| Variable Name | Required | Default Value | Description |
+| :--- | :---: | :--- | :--- |
+| `OUTBOX_WORKER_ENABLED` | No | `True` | Enables/disables outbox worker poll loop |
+| `OUTBOX_WORKER_BATCH_SIZE` | No | `50` | Number of outbox rows claimed per batch |
+| `OUTBOX_WORKER_POLL_INTERVAL_SECONDS` | No | `1.0` | Active polling loop frequency / idle sleep (seconds) |
+| `OUTBOX_WORKER_MAX_ATTEMPTS` | No | `5` | Maximum delivery attempts before moving to `DEAD_LETTER` |
+| `OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS` | No | `3600` | Interval in seconds between historical prune runs |
+| `OUTBOX_WORKER_RETENTION_HOURS` | No | `72` | Retention window in hours before pruning `PUBLISHED` rows |
+
+### 3.3 Media Storage (MinIO / S3)
+
+| Variable Name | Required | Default Value | Description |
+| :--- | :---: | :--- | :--- |
+| `S3_ENDPOINT_URL` | No | `http://localhost:9000` | MinIO / S3 API endpoint |
+| `S3_ACCESS_KEY_ID` | No | `minioadmin` | S3 / MinIO access key ID |
+| `S3_SECRET_ACCESS_KEY` | No | `minioadmin` | S3 / MinIO secret access key |
+| `S3_BUCKET_NAME` | No | `weather-media` | Object storage bucket for report attachments |
+| `S3_REGION` | No | `us-east-1` | S3 region identifier |
+
+### 3.4 External Feed Settings
+
+| Variable Name | Required | Default Value | Description |
+| :--- | :---: | :--- | :--- |
+| `IMD_API_ENDPOINT` | No | `https://api.imd.gov.in/api/v1` | IMD official API base URL |
+| `IMD_API_KEY` | No | `""` | IMD API key (optional for local mock) |
+| `NDMA_SACHET_RSS_URL` | No | `https://sachet.ndma.gov.in/...` | NDMA SACHET CAP alert URL |
+| `CWC_NWDP_API_ENDPOINT`| No | `https://nwdp.nwic.gov.in/api/3/action/datastore_search` | CWC river telemetry API endpoint |
+| `GDELT_DOC_ENDPOINT` | No | `http://api.gdeltproject.org/api/v2/doc/doc` | GDELT 2.0 Document API endpoint |
+| `MASTODON_INSTANCE_URL`| No | `https://mastodon.social` | Mastodon instance URL |
+| `MASTODON_HASHTAGS` | No | `mumbairains,delhirains,bengalururains...` | Monitored disaster hashtags |
+
+---
+
+## 4. Operational Runbook: Worker Daemons
+
+The backend uses 6 modular standalone processes. To run the full system locally:
+
 ```bash
-# Check stream length
-redis-cli XLEN stream:weather:realtime
-
-# Read latest 5 messages
-redis-cli XREVRANGE stream:weather:realtime + - COUNT 5
-```
-
-### 3.3 Database Health & Migration Check
-```bash
+# 1. Start the API Server
 cd back-end
-source .venv/bin/activate
-alembic current
-alembic check
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+
+# 2. Start the Transactional Outbox Worker
+python -m app.workers.run_outbox_worker
+
+# 3. Start the Orchestration Dispatcher
+python -m app.workers.run_dispatcher
+
+# 4. Start Ingestion Consumer Workers
+python -m app.workers.run_ingestion_worker
+python -m app.workers.run_observation_worker
+python -m app.workers.run_evidence_worker
+
+# 5. Start the Ingestion Scheduler (Optional / On-Demand)
+python -m app.workers.run_scheduler
 ```
-
-## 4. Git Security & Secret Prevention Guidelines
-
-1. **Pre-commit scanning**: The repository includes `.gitignore` matching all `.env*` files except `.env.example`.
-2. **Sanitized Defaults**: Default values in `.env.example` must point strictly to local Docker endpoints with dummy passwords (`postgres:postgres`, `minioadmin:minioadmin`).
-3. **Emergency Secret Revocation**: If any real production API key is accidentally committed to Git history, immediately revoke and regenerate the key from the provider dashboard; merely deleting the commit from working tree is insufficient.

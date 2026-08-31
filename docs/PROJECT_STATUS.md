@@ -2,7 +2,7 @@
 
 **Platform**: National Weather Big Data Analytics Platform (Smart India Hackathon 2026 — Problem Statement ID: `SIH26069`)
 **Domain**: Big Data Analytics / Disaster Management / Geospatial Intelligence
-**Document Status**: **ACTIVE SOURCE OF TRUTH (ENGINEERING FREEZE AT COMMIT `1e26ce4`)**
+**Document Status**: **ACTIVE SOURCE OF TRUTH (ENGINEERING FREEZE AT COMMIT `8161268`)**
 **Last Synchronized**: 2026-08-31
 
 ---
@@ -12,98 +12,56 @@
 | Attribute | Current Value / State |
 | :--- | :--- |
 | **Git Branch** | `main` |
-| **Current HEAD Commit** | `1e26ce4705f1ec87c629734539ead85303e81843` (`1e26ce4`) |
-| **Commit Subject** | `refactor(map): migrate Dashboard and LiveMap to GeoJSON` |
-| **Working Tree State** | **Clean** (`0` uncommitted changes, fully synchronized with `origin/main`) |
-| **Backend Test Gate** | **325 passed, 1 skipped** (`pytest -q` across 22 test suites in ~46s) |
-| **Frontend Test Gate** | **160 passed** (`vitest run` across 11 test suites in ~430ms) |
-| **Backend Static Gates** | `mypy` (0 issues across 136 source files), `ruff check` (0 errors), `ruff format` (141 files clean), `pyrefly` (0 errors) |
-| **Frontend Static Gates** | `tsc --noEmit` (0 errors), `eslint` (0 warnings/errors), `vite build` (production bundle built in ~1.9s) |
+| **Current HEAD Commit** | `8161268d19b3b6d5f2eaa9e9be8f49fd99e506a2` (`8161268`) |
+| **Commit Subject** | `feat: wire external ingestion and intelligence runtime` |
+| **Working Tree State** | **Clean** (`0` uncommitted changes, synchronized with `origin/main`) |
+| **Backend Test Baseline** | **352 passed, 1 skipped** (`pytest` across 24 test files) |
+| **Frontend Test Baseline** | **160 passed** (`vitest run` across 11 test suites) |
+| **Backend Static Gates** | `mypy` (0 issues across 143 source files), `ruff check` (0 errors), `ruff format` (148 files clean) |
+| **Frontend Static Gates** | `npm run typecheck` (0 errors), `npm run lint` (0 warnings/errors), `npm run build` (built clean in ~1.8s) |
 
 ---
 
-## 2. Core Product Requirements & Implementation Matrix
+## 2. Core Subsystem Truth Matrix
 
-| Requirement Domain | Requirement Description | Status | Evidence & Implementation Location |
+| Subsystem / Area | Implementation Status | Verification Classification | Evidence & Implementation Location |
 | :--- | :--- | :---: | :--- |
-| **Citizen Intake** | Citizen incident reporting form with multi-part payload, photo upload, reverse geocoding, and instant reference ID. | **COMPLETED & VERIFIED** | [CitizenReportForm.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/features/reports/CitizenReportForm.tsx), `POST /api/v1/reports`, MinIO signed image upload. |
-| **Public Tracking** | Public tracking page to inspect status, timeline, and resolution of submitted citizen reports. | **COMPLETED & VERIFIED** | [ReportTrackingPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/ReportTrackingPage.tsx), `GET /api/v1/reports/{id}`. |
-| **External Ingestion** | Pluggable adapters for official meteorological and emergency feeds (IMD AWS, NDMA SACHET, CWC Flood Telemetry, Mastodon, GDELT). | **COMPLETED & VERIFIED** | [back-end/app/ingestion/](file:///Users/akshatjain/Documents/SIH/back-end/app/ingestion/), `BaseIngestionAdapter`, deterministic seed adapters. |
-| **Streaming Buffer** | Decoupled event buffer and asynchronous queueing for high-throughput ingestion bursts. | **COMPLETED & VERIFIED** | Redis Streams `event:raw_ingestion`, [stream_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/stream_worker.py). |
-| **Event Classification** | Rule-based and NLP hazard categorization (Floods, Heavy Rain, Cyclonic Winds, Landslides, Heatwave, Cold Wave, Smog). | **COMPLETED & VERIFIED** | [event_classifier.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/event_classifier.py), 6 primary + secondary disaster classes. |
-| **Deduplication Clustering** | Spatiotemporal clustering of co-located reports ($R \le 2.5\text{ km}$, $\Delta T \le 120\text{ min}$) with cosine text similarity. | **COMPLETED & VERIFIED** | [duplicate_detection_service.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/duplicate_detection_service.py), `duplicate_clusters` PostGIS centroid tracking. |
-| **Physical Corroboration** | Real-time corroboration against proximate physical automated weather stations (IMD AWS telemetry) and river gauges. | **COMPLETED & VERIFIED** | [observation_corroboration_service.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/observation_corroboration_service.py), `physical_station_observations`. |
-| **Evidence Linking** | Provenance linking of cross-platform digital news, social posts, and official alerts. | **COMPLETED & VERIFIED** | [evidence_linking_service.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/evidence_linking_service.py), `digital_evidence_items`. |
-| **Explainable Credibility** | Deterministic multi-factor machine scoring ($0.0000$ to $0.9800$) with transparent component breakdown. | **COMPLETED & VERIFIED** | [credibility_engine.py](file:///Users/akshatjain/Documents/SIH/back-end/app/services/credibility_engine.py), `credibility_explanation` JSON breakdown. |
-| **Executive Dashboard** | Interactive Leaflet GIS map with bounded GeoJSON queries (`GET /api/v1/geo/incidents`), macro KPI cards, and severity breakdown. | **COMPLETED & VERIFIED** | [DashboardPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/DashboardPage.tsx), `GET /api/v1/dashboard/summary`, `GET /api/v1/geo/incidents`. |
-| **Live GIS Map** | Fullscreen operational Leaflet map with bounded GeoJSON layer, 500-feature bound, lazy detail fetching (`GET /api/v1/incidents/{id}`), and fallback resilience. | **COMPLETED & VERIFIED** | [LiveMapPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/LiveMapPage.tsx), [LiveMapContainer.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/features/map/LiveMapContainer.tsx), `GET /api/v1/geo/incidents`. |
-| **Analytics Platform** | Dedicated weather big-data analytics interface with temporal trend charts, category distributions, and regional demographics. | **COMPLETED & VERIFIED** | [AnalyticsPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/AnalyticsPage.tsx), `GET /api/v1/analytics/trends`, `GET /api/v1/analytics/regional`. |
-| **Incident Deep-Dive** | 5-dimension forensic intelligence inspection (Credibility, Clusters, Evidence, Physical Sensors, Pipeline Stage Telemetry). | **COMPLETED & VERIFIED** | [IncidentDetailPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/IncidentDetailPage.tsx), [IncidentExplorerPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/IncidentExplorerPage.tsx). |
-| **Verification & Triage** | Priority triage backlog for emergency operators with immutable audit logging and terminal state enforcement. | **COMPLETED & VERIFIED** | [VerificationQueuePage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/VerificationQueuePage.tsx), `POST /api/v1/verification/*`, `verification_events`. |
-| **Real-Time Streaming (SSE)** | Transactional outbox pattern, Redis Streams buffer, FastAPI SSE endpoint, centralized frontend event manager, and React Query invalidation. | **COMPLETED & VERIFIED** | `GET /api/v1/events/stream`, [outbox_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/outbox_worker.py), [realtimeService.ts](file:///Users/akshatjain/Documents/SIH/front-end/src/services/realtimeService.ts). |
-| **Production Auth & RBAC** | Institutional JWT/OAuth2 boundary with cryptographically signed tokens and role-based permissions. | **FUTURE EXTENSION** | Current MVP uses institutional Emergency Operations Portal (`/login`) with audit logging; production RBAC is deferred. |
+| **Citizen Intake** | Mobile-friendly reporting form, photo upload to MinIO, PostGIS spatial point generation, instant tracking ID. | **MANUALLY & RUNTIME VERIFIED** | [CitizenReportForm.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/features/reports/CitizenReportForm.tsx), `POST /api/v1/reports`, report `RPT-20260831-B848D18A`. |
+| **Public Tracking** | Public tracking lookup for status, timeline, and administrative resolution. | **RUNTIME VERIFIED** | [ReportTrackingPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/ReportTrackingPage.tsx), `GET /api/v1/reports/{id}`. |
+| **External Ingestion** | Multi-source adapter framework (IMD, NDMA, CWC, Mastodon, GDELT, DemoSeed). | **BUILT & TESTED** | [back-end/app/ingestion/](file:///Users/akshatjain/Documents/SIH/back-end/app/ingestion/), `registry.py`, `test_external_ingestion_integration.py`. |
+| **Ingestion Scheduler** | Polling scheduler with typed event routing across Redis streams. | **RUNTIME VERIFIED** | [run_scheduler.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_scheduler.py), `IngestionScheduler`. |
+| **Ingestion Consumer Worker** | Consumes `stream:weather:events`, persists reports (`QUEUED`), stages outbox triggers. | **RUNTIME VERIFIED** | [run_ingestion_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_ingestion_worker.py), `IngestionWorker`. |
+| **Observation Worker** | Consumes `stream:weather:observations`, persists to `weather_observations`. | **RUNTIME VERIFIED** | [run_observation_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_observation_worker.py), `ObservationWorker`. |
+| **Evidence Worker** | Consumes `stream:weather:evidence`, persists to `evidence_items`. | **RUNTIME VERIFIED** | [run_evidence_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_evidence_worker.py), `EvidenceWorker`. |
+| **Intelligence Pipeline** | 5-stage deterministic pipeline (`LOCATION`, `DUPLICATE`, `EVIDENCE`, `OBSERVATION`, `CREDIBILITY`). | **RUNTIME VERIFIED** | [pipeline.py](file:///Users/akshatjain/Documents/SIH/back-end/app/intelligence/pipeline.py), `IncidentPipeline`, `test_live_intelligence_integration.py`. |
+| **Orchestration Dispatcher** | Consumes `stream:weather:orchestration`, runs pipeline, transitions reports to `COMPLETED`. | **RUNTIME VERIFIED** | [run_dispatcher.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_dispatcher.py), `OrchestrationDispatcher`. |
+| **Transactional Outbox** | PostgreSQL `realtime_outbox` with `SKIP LOCKED` batch claiming and 72h historical pruning. | **RUNTIME VERIFIED** | [run_outbox_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_outbox_worker.py), `RealtimeOutboxWorker`. |
+| **Redis Streams Buffer** | 6 dedicated streams (`realtime`, `events`, `observations`, `evidence`, `orchestration`, `dead_letter`). | **RUNTIME VERIFIED** | Local Redis 7 container, microsecond buffering. |
+| **Realtime SSE Transport** | Persistent Server-Sent Events endpoint with cursor replay and comment heartbeats. | **RUNTIME VERIFIED** | `GET /api/v1/events/stream`, [events.py](file:///Users/akshatjain/Documents/SIH/back-end/app/api/v1/events.py). |
+| **Frontend Realtime Manager** | Singleton `RealtimeService` with bounded deduplication (1,000 items) and React Query invalidation. | **MANUALLY & RUNTIME VERIFIED** | [realtimeService.ts](file:///Users/akshatjain/Documents/SIH/front-end/src/services/realtimeService.ts), live dashboard update without refresh. |
+| **Executive Dashboard & Map** | Live Leaflet map with bounded GeoJSON (`GET /api/v1/geo/incidents`, 500-bound), macro KPI cards. | **MANUALLY & RUNTIME VERIFIED** | [DashboardPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/DashboardPage.tsx), [LiveMapPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/LiveMapPage.tsx). |
+| **Verification & Triage Queue** | Priority triage queue with side-by-side evidence inspection and immutable audit logging. | **MANUALLY & RUNTIME VERIFIED** | [VerificationQueuePage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/VerificationQueuePage.tsx), `POST /api/v1/verification/*`. |
+| **Analytics Platform** | Server-aggregated activity trends and two-tier regional demographics. | **RUNTIME VERIFIED** | [AnalyticsPage.tsx](file:///Users/akshatjain/Documents/SIH/front-end/src/pages/AnalyticsPage.tsx), `GET /api/v1/analytics/*`. |
+| **GDELT News Feed** | News feed ingestion adapter for disaster headlines. | **NOT LIVE VERIFIED** | Adapter built and unit tested; public endpoint rate-limited/unverified live. |
+| **Mastodon Social Feed** | Social feed ingestion adapter for emergency weather hashtags. | **NOT LIVE VERIFIED** | Adapter built and unit tested; public token unverified live. |
+| **Production Auth / RBAC** | Institutional JWT token signing and role-based permissions. | **DEFERRED** | Operator verification endpoints are currently unauthenticated for the MVP/demo environment. Production JWT/RBAC is deferred. |
 
 ---
 
-## 3. Realtime Subsystem Delivery & Architecture Snapshot
+## 3. Real Intelligence Verification Proof
 
-The realtime subsystem operates on a transactional outbox architecture with at-least-once delivery guarantees and frontend deduplication:
-
-```
-Domain Mutation (Reports / Verification / Intelligence)
-    ↓
-PostgreSQL ACID Transaction
-    ├── weather_reports / duplicate_clusters
-    ├── verification_events (immutable audit log)
-    └── realtime_outbox (status = 'PENDING')
-    ↓
-Dedicated Outbox Worker (python -m app.workers.run_outbox_worker)
-    ├── SELECT ... FOR UPDATE SKIP LOCKED (batch = 50)
-    ├── Publishes to Redis Stream 'stream:weather:realtime' (MAXLEN ~10000)
-    └── Updates realtime_outbox status to 'PUBLISHED' (or 'DEAD_LETTER' on max attempts)
-    ↓
-FastAPI SSE Transport (GET /api/v1/events/stream)
-    ├── Reads from Redis Stream via XREAD
-    ├── Supports cursor replay via Last-Event-ID header
-    └── Emits system.resync_required if cursor is trimmed
-    ↓
-Frontend Realtime Client (realtimeService.ts)
-    ├── Native EventSource connection with auto-reconnect
-    ├── Ring-buffer deduplication (1000 event_ids)
-    └── Targeted React Query cache invalidation (geoAll, summary, trends)
-```
-
-### Realtime Verification Milestones:
-- **12B-1: Transactional Realtime Outbox**: Atomic outbox persistence in PostgreSQL with `SKIP LOCKED` batch claiming and exponential retry backoff.
-- **12C-1: Backend SSE Transport**: Persistent HTTP `text/event-stream` endpoint with comment heartbeats, cursor replay, and resync signaling.
-- **12C-2: Frontend Realtime Client & Manager**: Singleton `RealtimeService` with automatic reconnect, bounded FIFO deduplication (1,000 items), and React Query cache invalidation.
-- **12C-3: End-to-End Realtime Integration**: Full pipeline verified with integration tests and live browser manual verification.
-- **12D-1: Outbox Worker Runtime Hardening**: Standalone process runner (`run_outbox_worker.py`), adaptive draining, idle sleep, 72-hour historical pruning, multi-worker concurrency safety, and graceful signal shutdown.
-
-### Live Browser Manual Verification Evidence:
-- **Test Report**: Incident `"testinggg"` created in `PENDING` state.
-- **Initial Dashboard Counters**: **Pending Review: 2537**, **Verified Reports: 480 / 3460**.
-- **Verification Transition**: Emergency operator verified the report.
-- **Live Propagation Result**: Without manual page refresh, the dashboard updated in real-time to **Pending Review: 2536**, **Verified Reports: 481 / 3460**, and report card transitioned to `VERIFIED`.
+- **Live Manual Report**: `RPT-20260831-B848D18A` (`ID: fbb34eb2-ce5c-4e86-8b39-8666b26273a4`)
+  - Title: `INTELLIGENCE TEST 001`
+  - Processing Status: `COMPLETED`
+  - Credibility Score: `0.537`
+  - Readiness: `INTELLIGENCE_READY`
+  - Proven Chain: Citizen submit -> PostgreSQL outbox -> Outbox Worker -> Orchestration Stream -> Dispatcher -> 5-Stage Pipeline -> Persisted Result -> Frontend UI.
 
 ---
 
-## 4. Operational Limits & Known MVP Boundaries
+## 4. Operational Boundaries & Known Limitations
 
-1. **SSE Security Boundary**: Realtime SSE endpoint (`/api/v1/events/stream`) operates on the open read-oriented API model. Sensitive fields (passwords, auth tokens, phone numbers, operator notes, internal stack traces) are explicitly stripped at the outbox staging boundary.
-2. **Worker Supervision**: The Outbox Worker runs as a dedicated, independent process (`python -m app.workers.run_outbox_worker`). Production supervisor integration (systemd, Supervisord, Kubernetes) remains an operational deployment responsibility.
-3. **Delivery Semantics**: At-least-once stream delivery. Duplicate delivery is possible. The frontend suppresses duplicate deliveries for event IDs retained in its bounded deduplication buffer. The system does not guarantee exactly-once delivery or processing.
-4. **Redis Stream Capacity**: Redis Stream `stream:weather:realtime` is capped at approximately 10,000 entries. Clients offline longer than the stream retention window receive `system.resync_required` to reconcile via REST.
-5. **Outbox Retention**: PostgreSQL `realtime_outbox` retains published events for 72 hours before automated periodic pruning. Dead-letter rows are retained indefinitely.
-6. **500-Feature Map Bound**: GeoJSON map queries enforce a 500-feature server-side limit (`LIMIT 500`) to protect browser memory and rendering performance. Macro totals remain authoritatively computed via server summary endpoints.
-7. **Cloud Observability**: Application uses structured logging; distributed tracing (OpenTelemetry / APM) remains deferred for cloud deployment.
-
----
-
-## 5. Engineering Freeze Statement
-
-- **Consistency**: The audited documentation set is consistent with the current implementation.
-- **Scope & Completeness**: The platform is functionally complete for the current SIH/MVP/demo scope, with documented production-hardening limitations remaining deferred.
-- **Verification Summary**: All automated quality gates passed, and the major user-facing workflows selected for manual browser verification passed.
-- **Freeze Status**: **ENGINEERING FEATURE DEVELOPMENT IS NOW FROZEN FOR SIH/MVP SCOPE.**
-- **Next Phase**: Transition to product study, jury presentation preparation, and scenario walkthroughs.
+1. **At-Least-Once Delivery**: Redis streams operate under at-least-once delivery semantics. The frontend suppresses duplicate UI reactions using its bounded 1,000-entry ring buffer.
+2. **External Live Providers**: GDELT and Mastodon adapters are unit tested but not verified against live external network endpoints. IMD, NDMA, and CWC feeds are verified with deterministic mock/seed formats.
+3. **Map Query 500-Feature Bound**: GeoJSON map queries enforce a 500-feature bound (`LIMIT 500`) to protect browser memory and rendering performance. Macro totals remain authoritatively computed via server summary endpoints.
+4. **Worker Supervision**: The 6 worker processes run as standalone Python CLI modules. Production supervisor configuration (`systemd`, Kubernetes) remains an infrastructure deployment responsibility.

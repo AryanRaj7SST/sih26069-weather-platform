@@ -4,6 +4,7 @@
 **Base URL**: `/api/v1`
 **Standard Response Format**: All responses adhere to a consistent JSON envelope.
 **Total Operations**: 23 operations across 22 canonical paths.
+**Status**: **SYNCHRONIZED WITH CURRENT CODE & OPENAPI SPECIFICATION**
 
 ---
 
@@ -15,8 +16,8 @@
   "success": true,
   "data": { ... },
   "meta": {
-    "timestamp": "2026-08-31T03:00:00.000Z",
-    "request_id": "req_01HZX89AB..."
+    "timestamp": "2026-08-31T13:25:33.000000Z",
+    "request_id": "req_bb864a4b25db"
   }
 }
 ```
@@ -29,14 +30,14 @@
   "pagination": {
     "page": 1,
     "page_size": 20,
-    "total_records": 184,
-    "total_pages": 10,
+    "total_records": 7256,
+    "total_pages": 363,
     "has_next": true,
     "has_prev": false
   },
   "meta": {
-    "timestamp": "2026-08-31T03:00:00.000Z",
-    "request_id": "req_01HZX89AB..."
+    "timestamp": "2026-08-31T13:25:33.000000Z",
+    "request_id": "req_bb864a4b25db"
   }
 }
 ```
@@ -47,12 +48,12 @@
   "success": false,
   "error": {
     "code": "RESOURCE_NOT_FOUND",
-    "message": "Incident with ID e53b4916-df63-4564-82e8-f10e76272a03 does not exist.",
+    "message": "Incident with ID fbb34eb2-ce5c-4e86-8b39-8666b26273a4 does not exist.",
     "details": []
   },
   "meta": {
-    "timestamp": "2026-08-31T03:00:00.000Z",
-    "request_id": "req_01HZX89AB..."
+    "timestamp": "2026-08-31T13:25:33.000000Z",
+    "request_id": "req_bb864a4b25db"
   }
 }
 ```
@@ -62,7 +63,7 @@
 ## 2. Authentication & Authorization Model
 
 > [!NOTE]
-> **Current MVP Architecture**: In accordance with the hackathon evaluation scope, triage mutations (`/api/v1/verification/*`) operate unauthenticated for evaluator testing. Mutations are automatically bound to the institutional reviewer (`officer@deoc.gov.in`, `DEOC_OFFICER`) in `verification_events`. Full OAuth2 / JWT authentication is deferred for production security hardening.
+> **Current MVP Architecture**: Operator verification endpoints are currently unauthenticated for the MVP/demo environment. Production JWT/RBAC is deferred.
 
 ---
 
@@ -73,7 +74,7 @@
 #### 1. Root Information
 - **Method & Path**: `GET /`
 - **Purpose**: System identification and platform version status.
-- **Response Shape** (`200 OK`):
+- **Response** (`200 OK`):
   ```json
   {
     "name": "National Weather Big Data Analytics Platform",
@@ -83,257 +84,162 @@
   }
   ```
 
-#### 2. Health & Dependency Readiness
+#### 2. Service Health Check
 - **Method & Path**: `GET /api/v1/health`
 - **Purpose**: Verifies PostgreSQL connection, PostGIS spatial extension, and Redis reachability.
-- **Response Shape** (`200 OK`):
+- **Response** (`200 OK`):
   ```json
   {
-    "status": "healthy",
-    "environment": "development",
-    "database": "connected",
-    "redis": "connected",
-    "version": "0.1.0"
+    "success": true,
+    "data": {
+      "status": "healthy",
+      "service": "National Weather Big Data Analytics Platform",
+      "environment": "development",
+      "version": "0.1.0"
+    },
+    "meta": {
+      "timestamp": "2026-08-31T13:25:33.000000Z"
+    }
   }
   ```
 
 ---
 
-### 3.2 Citizen & Multi-Source Report Ingestion
+### 3.2 Citizen Reporting & Tracking
 
-#### 3. Submit Citizen Incident Report
-- **Method & Path**: `POST /api/v1/reports`
-- **Content-Type**: `multipart/form-data`
-- **Form Fields**:
-  - `title`: `string` (min: 5, max: 255)
-  - `description`: `string` (optional, max: 2000)
-  - `latitude`: `float` (range: `-90.0` to `90.0`)
-  - `longitude`: `float` (range: `-180.0` to `180.0`)
-  - `location_name`: `string` (optional, max: 255)
-  - `reported_category`: `string` (e.g., `"FLOOD_WATERLOGGING"`)
-  - `severity`: `string` (`"LOW"`, `"MODERATE"`, `"HIGH"`, `"SEVERE"`, `"CRITICAL"`)
-  - `occurred_at`: `datetime ISO 8601` (optional, defaults to now)
-  - `photo`: `binary file` (optional, JPEG/PNG/WebP, max 15 MB)
-- **Response Shape** (`201 Created`):
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": "e53b4916-df63-4564-82e8-f10e76272a03",
-      "tracking_id": "RPT-20260831-X9K2",
-      "title": "Severe waterlogging near Kurla station",
-      "verification_status": "PENDING",
-      "created_at": "2026-08-31T03:00:00Z"
-    }
-  }
-  ```
-
-#### 4. List Ingested Reports
+#### 3. List & Filter Incident Reports
 - **Method & Path**: `GET /api/v1/reports`
-- **Query Parameters**: `page`, `page_size`, `status`, `category`, `severity`, `min_lat`, `max_lat`, `min_lon`, `max_lon`
-- **Response Shape** (`200 OK`): Paginated envelope of report summaries.
+- **Query Parameters**: `page` (int), `page_size` (int), `category` (string), `severity` (string), `verification_status` (string).
+- **Response** (`200 OK`): Paginated envelope containing `weather_reports` summaries.
 
-#### 5. Get Report by Reference Tracking ID or UUID
-- **Method & Path**: `GET /api/v1/reports/{id}`
-- **Path Parameter**: `id` — Reference tracking ID (`RPT-...`) or report UUID.
-- **Purpose**: Public citizen tracking and report status lookup.
-- **Response Shape** (`200 OK`): Full report detail with media metadata and verification status.
-
----
-
-### 3.3 Incident Intelligence & Deep Dive
-
-#### 6. List Filtered Operational Incidents
-- **Method & Path**: `GET /api/v1/incidents`
-- **Query Parameters**:
-  - `page`: `int` (default: 1)
-  - `page_size`: `int` (default: 20, max: 100)
-  - `category`: `string` (optional)
-  - `severity`: `string` (optional)
-  - `verification_status`: `string` (optional)
-  - `search`: `string` (searches title, location, tracking ID)
-- **Response Shape** (`200 OK`): Paginated array of `IncidentCardData`.
-
-#### 7. Get Full Incident Detail
-- **Method & Path**: `GET /api/v1/incidents/{id}`
-- **Purpose**: Incident summary, media attachments, cluster links, and audit history.
-- **Response Shape** (`200 OK`): `IncidentDetailData` object.
-
-#### 8. Get Operator Deep Detail
-- **Method & Path**: `GET /api/v1/incidents/{id}/operator-detail`
-- **Purpose**: Full forensic operator inspection view with unredacted source attributes for authorized DEOC triage.
-
-#### 9. Get Explainable Credibility Breakdown
-- **Method & Path**: `GET /api/v1/incidents/{id}/credibility`
-- **Response Shape** (`200 OK`):
+#### 4. Submit Citizen Incident Report
+- **Method & Path**: `POST /api/v1/reports`
+- **Content-Type**: `multipart/form-data` or `application/json`
+- **Behavior**: Atomically persists report in PostgreSQL, assigns tracking ID (`RPT-...`), stages `report.created` (UI) and `orchestration.incident_ingested` (intelligence pipeline) outbox rows.
+- **Response** (`201 Created`):
   ```json
   {
     "success": true,
     "data": {
-      "incident_id": "e53b4916-df63-4564-82e8-f10e76272a03",
-      "score": 0.9613,
-      "is_machine_assessed": true,
-      "label": "VERY_HIGH_CREDIBILITY",
-      "base_trust_prior": 0.50,
-      "engine_version": "v1",
-      "policy_version": "v1",
-      "explanation_text": "Machine-assessed credibility score of 0.9613.",
-      "positive_drivers": [
-        "Moderate baseline source trust (0.60).",
-        "Crowd volume signal from 19 duplicate incident reports (sub-signal: 1.00).",
-        "Digital evidence corroboration across 22 distinct provenance groups (score: 0.93)."
-      ],
-      "negative_drivers": [],
-      "uncertainty_flags": [],
-      "last_calculated_at": "2026-08-31T03:00:00Z"
+      "id": "fbb34eb2-ce5c-4e86-8b39-8666b26273a4",
+      "tracking_id": "RPT-20260831-B848D18A",
+      "title": "Severe waterlogging near metro station",
+      "verification_status": "PENDING",
+      "credibility_score": 0.537,
+      "created_at": "2026-08-31T12:21:18.759718Z"
     }
   }
   ```
 
-#### 10. Get Orchestration Intelligence Stages
-- **Method & Path**: `GET /api/v1/incidents/{id}/intelligence`
-- **Purpose**: Stage execution telemetry (`LOCATION`, `DUPLICATE`, `EVIDENCE`, `OBSERVATION`, `CREDIBILITY`).
+#### 5. Retrieve Single Report by ID or Tracking Code
+- **Method & Path**: `GET /api/v1/reports/{id}`
+- **Path Parameter**: `id` — UUID or `tracking_id` string (e.g. `RPT-20260831-B848D18A`).
+- **Response** (`200 OK`): Public report status, timeline, and resolution data.
 
-#### 11. Get Linked Digital Evidence
-- **Method & Path**: `GET /api/v1/incidents/{id}/evidence`
-- **Purpose**: Corroborated news articles, social posts, and official alerts.
+---
 
-#### 12. Get Corroborating Physical Observations
-- **Method & Path**: `GET /api/v1/incidents/{id}/observations`
-- **Purpose**: Weather telemetry from proximate IMD AWS and CWC river gauges.
+### 3.3 Incident Explorer & Intelligence Endpoints
 
-#### 13. Get Duplicate Cluster Topology
+#### 6. List & Filter Operational Incidents
+- **Method & Path**: `GET /api/v1/incidents`
+- **Query Parameters**: `page`, `page_size`, `status`, `category`, `severity`, `readiness`, `search`.
+- **Response** (`200 OK`): Paginated envelope containing list of operational incidents.
+
+#### 7. Retrieve Incident Detail
+- **Method & Path**: `GET /api/v1/incidents/{id}`
+- **Response** (`200 OK`): Full incident detail including credibility score, category, coordinates, and summary counts.
+
+#### 8. Retrieve Operator Incident Detail
+- **Method & Path**: `GET /api/v1/incidents/{id}/operator-detail`
+- **Response** (`200 OK`): Extended incident detail for administrative operators with raw metadata.
+
+#### 9. Retrieve Machine Credibility Breakdown
+- **Method & Path**: `GET /api/v1/incidents/{id}/credibility`
+- **Response** (`200 OK`): Explainable breakdown of credibility drivers, weights, and confidence flags.
+
+#### 10. Retrieve Duplicate Cluster Details
 - **Method & Path**: `GET /api/v1/incidents/{id}/cluster`
-- **Purpose**: Cluster membership, centroid coordinates, and member similarity scores.
+- **Response** (`200 OK`): Duplicate cluster members, similarity scores, and cluster centroid coordinates.
+
+#### 11. Retrieve Linked Digital Evidence Items
+- **Method & Path**: `GET /api/v1/incidents/{id}/evidence`
+- **Response** (`200 OK`): Cross-platform news, social posts, and official alerts linked to the incident.
+
+#### 12. Retrieve Corroborating Physical Observations
+- **Method & Path**: `GET /api/v1/incidents/{id}/observations`
+- **Response** (`200 OK`): Proximate automated weather station and hydrological gauge readings with distance/time delta.
+
+#### 13. Retrieve Intelligence Orchestration Status
+- **Method & Path**: `GET /api/v1/incidents/{id}/intelligence`
+- **Response** (`200 OK`): Readiness status and stage telemetry for the 5-stage pipeline (`LOCATION`, `DUPLICATE`, `EVIDENCE`, `OBSERVATION`, `CREDIBILITY`).
 
 ---
 
-### 3.4 Geospatial Vector API
+### 3.4 Geospatial & Analytics Endpoints
 
-#### 14. Live Incident GeoJSON Features
+#### 14. Geospatial Viewport Query (GeoJSON)
 - **Method & Path**: `GET /api/v1/geo/incidents`
-- **Purpose**: Bounded GeoJSON `FeatureCollection` for Leaflet vector map rendering.
-- **Query Parameters**:
-  - `bbox`: `min_lon,min_lat,max_lon,max_lat` (optional, max 10° span when bounded)
-  - `hours_ago`: `int` (optional)
-  - `category`: Disaster category filter (optional)
-  - `verification_status`: Verification status filter (optional)
-- **Server-Side Bound**: Returns up to **500 features** (`LIMIT 500`).
-- **Response Shape** (`200 OK`):
-  ```json
-  {
-    "type": "FeatureCollection",
-    "features": [
-      {
-        "type": "Feature",
-        "id": "e53b4916-df63-4564-82e8-f10e76272a03",
-        "geometry": {
-          "type": "Point",
-          "coordinates": [72.8777, 19.0760]
-        },
-        "properties": {
-          "tracking_id": "RPT-20260831-X9K2",
-          "title": "Severe waterlogging near Kurla station",
-          "category": "FLOOD_WATERLOGGING",
-          "severity": "HIGH",
-          "verification_status": "VERIFIED",
-          "credibility_score": 0.9613,
-          "occurred_at": "2026-08-31T02:30:00Z"
-        }
-      }
-    ]
-  }
-  ```
+- **Query Parameters**: `min_lat`, `min_lng`, `max_lat`, `max_lng`, `category`, `status`.
+- **Behavior**: Returns bounded FeatureCollection (`LIMIT 500`) with point geometries (`SRID 4326`).
+- **Response** (`200 OK`): Standard GeoJSON `FeatureCollection`.
 
----
-
-### 3.5 Verification & Triage Operations
-
-#### 15. Priority Verification Queue
-- **Method & Path**: `GET /api/v1/verification/queue`
-- **Query Parameters**: `page`, `page_size`, `category`, `severity`, `status`
-- **Purpose**: Backlog of `PENDING` and `UNDER_REVIEW` reports ranked by priority.
-
-#### 16. Authorize and Verify Incident
-- **Method & Path**: `POST /api/v1/verification/{id}/verify`
-- **Request Body**:
-  ```json
-  {
-    "notes": "Confirmed with Mumbai DEOC Flood Control Room.",
-    "broadcast_alert": true
-  }
-  ```
-- **Response Shape** (`200 OK`): Updated report with `verification_status = "VERIFIED"`.
-
-#### 17. Reject False Alarm or Spam
-- **Method & Path**: `POST /api/v1/verification/{id}/reject`
-- **Request Body**:
-  ```json
-  {
-    "rejection_reason": "INACCURATE_LOCATION",
-    "notes": "Photo belongs to historical 2021 archive."
-  }
-  ```
-- **Response Shape** (`200 OK`): Updated report with `verification_status = "REJECTED"`.
-
-#### 18. Merge as Duplicate
-- **Method & Path**: `POST /api/v1/verification/{id}/mark-duplicate`
-- **Request Body**:
-  ```json
-  {
-    "primary_report_id": "c8f7952a-cf91-4cf4-9279-d75d5a2d67ea",
-    "notes": "Duplicate citizen submission for Kurla bridge flooding."
-  }
-  ```
-- **Response Shape** (`200 OK`): Updated report with `verification_status = "DUPLICATE"`.
-
-#### 19. Place Under Review
-- **Method & Path**: `POST /api/v1/verification/{id}/review`
-- **Request Body**:
-  ```json
-  {
-    "notes": "Awaiting ground scout confirmation."
-  }
-  ```
-- **Response Shape** (`200 OK`): Updated report with `verification_status = "UNDER_REVIEW"`.
-
----
-
-### 3.6 Analytics & Dashboard Server Aggregations
-
-#### 20. Dashboard Summary Aggregation
+#### 15. Get Dashboard Metric Summary
 - **Method & Path**: `GET /api/v1/dashboard/summary`
-- **Query Parameters**: `time_range` (`24h`, `48h`, `7d`, `30d`, `all`), `category`, `severity`, `status`, `bbox`
-- **Response Shape** (`200 OK`): SQL-aggregated KPIs, total reports, verified count, under review, high severity count, diurnal curve, and category breakdown.
+- **Response** (`200 OK`): Macro KPI counts, severity breakdown, category distribution, and verification rates.
 
-#### 21. Activity Trends Time-Series
+#### 16. Get Analytics Activity Trends
 - **Method & Path**: `GET /api/v1/analytics/trends`
-- **Query Parameters**: `time_range`, `interval` (`hour`, `day`), `category`, `severity`, `status`, `bbox`
-- **Response Shape** (`200 OK`): Time-bucketed volume and verification progression.
+- **Query Parameters**: `window` (`24h`, `7d`, `30d`, `all`).
+- **Response** (`200 OK`): Time-series bucketed volume and verification progression.
 
-#### 22. Regional Demographics Distribution
+#### 17. Get Regional Incident Distribution
 - **Method & Path**: `GET /api/v1/analytics/regional`
-- **Query Parameters**: `time_range`, `category`, `severity`, `status`, `bbox`
-- **Response Shape** (`200 OK`): Two-tier regional aggregation (urban clusters and state boundaries).
+- **Response** (`200 OK`): Two-tier regional aggregation by state/district with risk rankings.
 
 ---
 
-### 3.7 Real-Time Event Streaming
+### 3.5 Verification & Triage Workflow
 
-#### 23. Real-Time Server-Sent Events (SSE) Stream
+#### 18. Retrieve Operator Verification Queue
+- **Method & Path**: `GET /api/v1/verification/queue`
+- **Query Parameters**: `page`, `page_size`, `sort_by` (`credibility`, `severity`, `date`).
+- **Response** (`200 OK`): Prioritized backlog of pending incident reports.
+
+#### 19. Authorize and Verify Incident
+- **Method & Path**: `POST /api/v1/verification/{id}/verify`
+- **Request Body**: `{"notes": "Verified against IMD AWS gauge."}`
+- **Behavior**: Transitions `verification_status` to `VERIFIED`, writes immutable audit row to `verification_events`, stages `report.verification_changed` outbox event.
+- **Response** (`200 OK`): Updated verification envelope.
+
+#### 20. Mark Incident Under Active Review
+- **Method & Path**: `POST /api/v1/verification/{id}/review`
+- **Behavior**: Transitions `verification_status` to `UNDER_REVIEW`.
+- **Response** (`200 OK`): Updated verification envelope.
+
+#### 21. Reject Incident as False / Hoax / Inaccurate
+- **Method & Path**: `POST /api/v1/verification/{id}/reject`
+- **Behavior**: Transitions `verification_status` to `REJECTED`.
+- **Response** (`200 OK`): Updated verification envelope.
+
+#### 22. Mark Incident as Duplicate
+- **Method & Path**: `POST /api/v1/verification/{id}/mark-duplicate`
+- **Behavior**: Transitions `verification_status` to `DUPLICATE`.
+- **Response** (`200 OK`): Updated verification envelope.
+
+---
+
+### 3.6 Realtime Server-Sent Events (SSE) Transport
+
+#### 23. Realtime Server-Sent Events (SSE) Stream
 - **Method & Path**: `GET /api/v1/events/stream`
-- **Transport**: Persistent HTTP `text/event-stream; charset=utf-8`
-- **Query / Header Parameters**: `Last-Event-ID` header or `?last_event_id=...` query parameter (Redis sequence cursor).
-- **Heartbeats**: Emits comment keepalives (`: keepalive\n\n`) every 15 seconds.
-- **Event Types**:
-  1. `report.created`
-  2. `report.verification_changed`
-  3. `report.intelligence_ready`
-  4. `cluster.updated`
-  5. `system.resync_required`
-- **SSE Framing**:
-  ```http
-  id: 1788095860922-0
-  event: report.verification_changed
-  data: {"event_id":"550e8400-e29b-41d4-a716-446655440000","event_type":"report.verification_changed","occurred_at":"2026-08-31T03:00:00Z","entity_id":"rep-92bc018a","tracking_id":"RPT-2026-8921","payload":{"previous_status":"PENDING","new_status":"VERIFIED"}}
+- **Headers Supported**: `Last-Event-ID` (for cursor replay from Redis Stream `stream:weather:realtime`).
+- **Media-Type**: `text/event-stream`
+- **Framing**:
+  ```text
+  id: 1725110400000-0
+  event: report.created
+  data: {"event_id":"...","event_type":"report.created","entity_id":"...","payload":{...}}
+
+  : ping
   ```
+- **Delivery Guarantee**: **At-least-once delivery with bounded client-side deduplication (1,000 items). No exactly-once guarantee.**

@@ -2,374 +2,231 @@
 
 **Problem Statement ID**: `SIH26069`
 **Platform**: National Weather Big Data Analytics Platform
-**Status**: **FROZEN FOR SIH/MVP SCOPE** (Baseline: `faa14cd`)
+**Status**: **SYNCHRONIZED WITH CURRENT CODE & WORKER RUNTIMES**
+**Baseline Git Commit**: `8161268d19b3b6d5f2eaa9e9be8f49fd99e506a2`
 
 ---
 
-## 1. System Overview & End-to-End Flow
+## 1. System Overview & End-to-End Topology
 
 The platform is architected as an asynchronous, event-driven data processing pipeline backed by a high-performance spatial database (PostgreSQL 16 + PostGIS) and a reactive presentation layer (React 18 + Leaflet + TanStack Query).
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion_Layer["1. Ingestion & Data Feeds"]
-        CR["Citizen Reports (Multipart HTTP)"]
-        IMD["IMD Automatic Weather Stations"]
-        NDMA["NDMA SACHET Alert Feeds"]
-        CWC["CWC River Flood Telemetry"]
-        MAST["Mastodon Emergency Posts"]
-        GDELT["GDELT Disaster News Feed"]
+    subgraph Ingestion_Layer["1. Ingestion & Multi-Source Feeds"]
+        CR["Citizen Reports (Multipart HTTP /form)"]
+        SCHED["Ingestion Scheduler (run_scheduler)"]
+        IMD["IMD AWS Telemetry Adapter"]
+        NDMA["NDMA SACHET Alert Adapter"]
+        CWC["CWC River Flood Gauge Adapter"]
+        MAST["Mastodon Emergency Social Adapter"]
+        GDELT["GDELT Disaster News Adapter"]
+        SEED["Demo Seed Ingestion Adapter"]
     end
 
-    subgraph Core_Engine["2. Core Domain & Intelligence Pipeline"]
-        API["FastAPI REST Application (22 Paths / 23 Ops)"]
-        VAL["1. Schema & Geospatial Validation"]
-        CLASS["2. Event Classifier (Rule Heuristics + NLP)"]
-        DEDUP["3. Deduplication & Spatiotemporal Clustering (PostGIS GiST)"]
-        CORROB["4. Physical Sensor & Digital Evidence Corroboration"]
-        CRED["5. Explainable Credibility Engine (0.0000 - 0.9800)"]
+    subgraph Streaming_Buffers["2. Redis Streams Buffering Tier"]
+        STR_EVT[("stream:weather:events")]
+        STR_OBS[("stream:weather:observations")]
+        STR_EVD[("stream:weather:evidence")]
+        STR_ORCH[("stream:weather:orchestration")]
+        STR_RT[("stream:weather:realtime")]
+        STR_DLQ[("stream:weather:dead_letter")]
     end
 
-    subgraph Storage_Tier["3. Persistence & System of Record"]
-        PG[("PostgreSQL 16 + PostGIS (SRID 4326)")]
-        MINIO[("MinIO / S3 Object Storage (Media Blobs)")]
+    subgraph Consumer_Workers["3. Modular Consumer Worker Daemons"]
+        W_ING["Ingestion Worker (run_ingestion_worker)"]
+        W_OBS["Observation Worker (run_observation_worker)"]
+        W_EVD["Evidence Worker (run_evidence_worker)"]
+        W_OUT["Outbox Worker (run_outbox_worker)"]
+        W_DISP["Orchestration Dispatcher (run_dispatcher)"]
+    end
+
+    subgraph Intelligence_Engine["4. 5-Stage Incident Intelligence Pipeline"]
+        S_LOC["1. LOCATION (Geocoding & Spatial Geometry)"]
+        S_DUP["2. DUPLICATE (PostGIS ST_DWithin + FastEmbed Cosine)"]
+        S_EVD["3. EVIDENCE (Cross-Platform Digital News Linking)"]
+        S_OBS["4. OBSERVATION (Physical Weather Sensor Corroboration)"]
+        S_CRD["5. CREDIBILITY (Explainable Multi-Factor Scoring)"]
+    end
+
+    subgraph Storage_Tier["5. System of Record & Object Storage"]
+        PG[("PostgreSQL 16 + PostGIS (15 Tables, SRID 4326)")]
+        MINIO[("MinIO / S3 Storage (Media Blobs)")]
         OUTBOX[("Transactional Outbox (realtime_outbox)")]
     end
 
-    subgraph Realtime_Infrastructure["4. Real-Time Streaming Subsystem"]
-        WORKER["Outbox Worker (run_outbox_worker.py)"]
-        REDIS[("Redis 7 Stream (stream:weather:realtime)")]
-        SSE["FastAPI SSE Endpoint (/api/v1/events/stream)"]
-    end
-
-    subgraph Presentation_Layer["5. Operator & Analytics Frontend"]
+    subgraph Presentation_Layer["6. Operator & Analytics Frontend"]
+        SSE["FastAPI SSE Transport (/api/v1/events/stream)"]
         RTS["RealtimeService Singleton (EventSource)"]
         CACHE["TanStack React Query Cache"]
         DASH["Dashboard & KPI Telemetry (/dashboard)"]
         MAP["Live GIS Leaflet Map (/map)"]
-        QUEUE["Verification & Triage Queue (/admin/queue)"]
-        ANALYTICS["Weather Big Data Analytics (/analytics)"]
-        EXPLORER["Incident Explorer & Deep Dive (/incidents)"]
+        QUEUE["Verification Queue (/admin/queue)"]
+        ANALYTICS["Weather Analytics Platform (/analytics)"]
+        EXPLORER["Incident Explorer & Deep-Dive (/incidents)"]
     end
 
-    CR --> API
-    IMD & NDMA & CWC & MAST & GDELT --> API
-    API --> VAL --> CLASS --> DEDUP --> CORROB --> CRED
-    CRED -->|Atomic ACID Write| PG
-    CRED -->|Atomic ACID Write| OUTBOX
-    API -->|Upload Media| MINIO
+    %% Ingestion to Streams
+    SCHED --> IMD & NDMA & CWC & MAST & GDELT & SEED
+    SCHED -->|Normalized Events| STR_EVT
+    SCHED -->|Sensor Metrics| STR_OBS
+    SCHED -->|News / Media| STR_EVD
 
-    OUTBOX -.->|SKIP LOCKED Poll| WORKER
-    WORKER -->|XADD with Stable Event ID| REDIS
-    REDIS -->|XREAD & Last-Event-ID Replay| SSE
-    SSE -->|Persistent HTTP Push| RTS
-    RTS -->|Cache Invalidation| CACHE
-    CACHE -->|REST Refetch| DASH & MAP & QUEUE & ANALYTICS & EXPLORER
+    %% Streams to Workers
+    STR_EVT --> W_ING
+    STR_OBS --> W_OBS
+    STR_EVD --> W_EVD
+
+    %% Persistence
+    W_ING -->|Persist Reports (QUEUED)| PG
+    W_ING -->|Stage Outbox Trigger| OUTBOX
+    W_OBS -->|Persist Sensor Data| PG
+    W_EVD -->|Persist News Articles| PG
+
+    %% Citizen Intake
+    CR -->|POST /api/v1/reports| PG
+    CR -->|Upload Photos| MINIO
+    CR -->|Stage dual outbox rows| OUTBOX
+
+    %% Outbox Relay
+    OUTBOX -->|SKIP LOCKED Poll| W_OUT
+    W_OUT -->|Relay Orchestration Triggers| STR_ORCH
+    W_OUT -->|Relay UI SSE Events| STR_RT
+
+    %% Dispatcher to Pipeline
+    STR_ORCH --> W_DISP
+    W_DISP --> S_LOC --> S_DUP --> S_EVD --> S_OBS --> S_CRD
+    S_CRD -->|Persist Intelligence & COMPLETED| PG
+    S_CRD -->|Stage report.intelligence_ready| OUTBOX
+
+    %% Realtime Push to Frontend
+    STR_RT --> SSE --> RTS --> CACHE
+    CACHE --> DASH & MAP & QUEUE & ANALYTICS & EXPLORER
 ```
 
 ---
 
-## 2. Layered Architecture & Component Ownership
+## 2. Redis Streams Topology & Responsibilities
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. PRESENTATION LAYER (front-end/src/)                                      │
-│ - Pages: Dashboard, LiveMap, Analytics, VerificationQueue, IncidentDetail   │
-│ - State: TanStack Query v5 (Server Cache), RealtimeService (SSE Singleton)  │
-│ - Responsibility: Pure UI rendering, filter coordination, lazy REST fetch  │
-│ - Boundary: NEVER recalculates credibility, cluster math, or spatial radius │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 2. API & GATEWAY LAYER (back-end/app/api/v1/)                               │
-│ - Routers: reports, incidents, verification, geo, dashboard, analytics, SSE │
-│ - Validation: Strict Pydantic v2 schemas and query parsing                  │
-│ - Responsibility: Route handling, error mapping, transaction lifecycle      │
-│ - Boundary: No raw SQL string generation; delegates to Service layer        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 3. DOMAIN & INTELLIGENCE SERVICE LAYER (back-end/app/services/)             │
-│ - Services: IncidentService, CredibilityEngine, DuplicateDetectionService,  │
-│             ObservationCorroboration, EvidenceLinking, AnalyticsService     │
-│ - Responsibility: Multi-factor scoring, PostGIS clustering, outbox creation │
-│ - Boundary: Stateless business logic executed within async DB sessions      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 4. REALTIME WORKER & STREAMING TIER (back-end/app/workers/)                 │
-│ - Process: Dedicated Outbox Worker (run_outbox_worker.py)                   │
-│ - Message Broker: Redis 7 Stream (stream:weather:realtime, MAXLEN ~10000)   │
-│ - Transport: FastAPI SSE (/api/v1/events/stream)                            │
-│ - Responsibility: Reliable event relay, backoff retry, client replay        │
-│ - Boundary: At-least-once push; does not mutate business domain state       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 5. PERSISTENCE & STORAGE TIER (PostgreSQL 16 + PostGIS + MinIO)             │
-│ - System of Record: PostgreSQL 16 with PostGIS extension (SRID 4326)        │
-│ - Object Store: MinIO S3-compatible bucket (weather-media)                  │
-│ - Reliability: Transactional Outbox (realtime_outbox table)                 │
-│ - Boundary: Foreign key constraints, PostGIS spatial indexing, ACID safety  │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The platform utilizes **6 dedicated Redis streams** with explicit architectural roles:
+
+| Stream Key | Publisher | Consumer | Purpose | Payload Schema |
+| :--- | :--- | :--- | :--- | :--- |
+| `stream:weather:events` | `run_scheduler` | `run_ingestion_worker` (`group:weather:ingestion`) | Buffers raw incident events from external adapters | `NormalizedIngestionEvent` |
+| `stream:weather:observations` | `run_scheduler` | `run_observation_worker` (`group:weather:observations`) | Buffers physical sensor/river gauge telemetry | `NormalizedObservationEvent` |
+| `stream:weather:evidence` | `run_scheduler` | `run_evidence_worker` (`group:weather:evidence`) | Buffers digital news articles and social posts | `NormalizedEvidenceEvent` |
+| `stream:weather:orchestration` | `run_outbox_worker` & `RealtimeService` | `run_dispatcher` (`group:weather:orchestrators`) | Asynchronous triggers executing the 5-stage `IncidentPipeline` | `OrchestrationEvent` |
+| `stream:weather:realtime` | `run_outbox_worker` & `RealtimeService` | Browser clients via `/api/v1/events/stream` | Real-time UI updates and cache invalidation | `RealtimeEvent` envelope |
+| `stream:weather:dead_letter` | `OrchestrationDispatcher` & `RealtimeOutboxWorker` | Operational DLQ monitor | Poison pills and exhausted retry events | `DeadLetterRecord` |
 
 ---
 
-## 3. Transaction Boundaries & Intelligence Pipeline
+## 3. Worker Process Topology & Execution
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Citizen as Citizen / Ingestion Provider
-    participant API as FastAPI Gateway
-    participant S3 as MinIO S3 Storage
-    participant DB as PostgreSQL 16 (PostGIS)
-    participant Worker as Outbox Worker Process
-    participant Redis as Redis Stream
-    participant SSE as FastAPI SSE Gateway
-    participant FE as Frontend Dashboard
-
-    Citizen->>API: POST /api/v1/reports (Multipart Intake)
-    API->>S3: PutObject (Image Blobs, SHA-256 Checksum)
-    S3-->>API: Object URI & Metadata
-
-    rect rgb(240, 248, 255)
-    note over API,DB: Single PostgreSQL ACID Transaction
-    API->>DB: INSERT INTO weather_reports (ST_SetSRID(ST_MakePoint(), 4326))
-    API->>DB: INSERT INTO report_media (Storage Key, SHA256)
-    API->>DB: INSERT INTO realtime_outbox (status = 'PENDING', payload)
-    API->>DB: COMMIT Transaction
-    end
-
-    API-->>Citizen: 201 Created (tracking_id: RPT-...)
-
-    note over Worker,Redis: Asynchronous Reliable Event Dispatch
-    loop Every poll_interval (1.0s)
-        Worker->>DB: SELECT FOR UPDATE SKIP LOCKED (batch_size = 50)
-        Worker->>Redis: XADD stream:weather:realtime (event_id, payload)
-        Worker->>DB: UPDATE realtime_outbox SET status = 'PUBLISHED'
-    end
-
-    Redis-->>SSE: XREAD message
-    SSE-->>FE: HTTP text/event-stream (event: report.created)
-    FE->>FE: RealtimeService Deduplication (Seen event_id check)
-    FE->>API: GET /api/v1/dashboard/summary (Authoritative Refetch)
-    API-->>FE: Updated Aggregated KPIs
-    FE->>FE: Re-render UI Cards Smoothly
-```
-
----
-
-## 4. Real-Time Outbox Subsystem
-
-The real-time subsystem decouples domain database transactions from external streaming transports using the Transactional Outbox pattern paired with Redis Streams and Server-Sent Events (SSE).
-
-### 4.1 End-to-End Data Flow
-
-```mermaid
-flowchart TD
-    subgraph PostgreSQL_Tier["1. PostgreSQL Transaction Boundary"]
-        MUT["Domain Mutation (Report / Verification / Intelligence)"]
-        MUT --> BIZ[("weather_reports / duplicate_clusters")]
-        MUT --> AUD[("verification_events (Immutable Audit)")]
-        MUT --> OUT[("realtime_outbox (status = 'PENDING')")]
-    end
-
-    subgraph Worker_Tier["2. Independent Outbox Worker Tier"]
-        OUT -.->|SELECT ... FOR UPDATE SKIP LOCKED| CLAIM["Claim Batch (batch_size = 50)"]
-        CLAIM --> PUB["XADD stream:weather:realtime (with Stable event_id)"]
-        PUB --> ACK["Update realtime_outbox status = 'PUBLISHED'"]
-        PUB -.->|On Failure| RETRY["Exponential Backoff Retry (Max 5 attempts -> DEAD_LETTER)"]
-    end
-
-    subgraph Redis_Transport["3. Redis Streams In-Memory Tier"]
-        PUB --> R_STREAM[("Redis Stream: stream:weather:realtime (MAXLEN ~10000)")]
-    end
-
-    subgraph SSE_Gateway["4. FastAPI SSE Gateway Tier"]
-        R_STREAM -->|XREAD block_ms = 2000| SSE_EP["FastAPI Endpoint (/api/v1/events/stream)"]
-        SSE_EP -->|Cursor Replay via Last-Event-ID| REPLAY["Stream Replay or Live Push"]
-    end
-
-    subgraph Frontend_Client["5. Frontend Presentation Tier"]
-        REPLAY -->|HTTP text/event-stream| RTS["RealtimeService Singleton"]
-        RTS --> DEDUPE["FIFO Ring Buffer Deduplication (1000 event_ids)"]
-        DEDUPE --> RQ_INV["React Query Cache Invalidation (geoAll, lists, summaries)"]
-        RQ_INV --> REST_FETCH["Targeted REST Refetch (GET /summary, /geo, /incidents)"]
-        REST_FETCH --> UI["UI Components Re-Rendered Without Page Reload"]
-    end
-```
-
-### 4.2 Architectural Rationale
-
-1. **Why PostgreSQL Transactional Outbox?**
-   - **Guaranteed Consistency**: Business entity mutations, audit logs, and outbox staging records commit together in a single ACID transaction.
-   - **Zero Ghost Events**: If a transaction rolls back, the outbox record is discarded. No event is ever published for an uncommitted mutation.
-   - **Elimination of Distributed Transactions**: Removes fragile distributed two-phase commits (2PC) between PostgreSQL and Redis.
-
-2. **Why Dedicated Outbox Worker Process (`run_outbox_worker.py`)?**
-   - **Web Request Decoupling**: API request handlers never block on external network I/O or Redis publish latency.
-   - **Horizontal Multi-Worker Scaling**: Multiple worker replicas query `realtime_outbox` concurrently using `SELECT ... FOR UPDATE SKIP LOCKED`, preventing lock contention and duplicate message claiming.
-   - **Self-Healing Backlog Draining**: Continues loop execution immediately when `published_count > 0` to drain backlogs rapidly before sleeping.
-
-3. **Why Redis Streams (`stream:weather:realtime`)?**
-   - **Ordered Sequence**: Messages possess monotonically increasing millisecond sequence IDs (e.g., `1788095860922-0`).
-   - **Native Replay**: Enables historical cursor replay via `XREAD` using the browser's `Last-Event-ID`.
-   - **Bounded Memory Profile**: Capped with approximate trimming (`MAXLEN ~ 10000`) to guarantee a stable in-memory footprint.
-
-4. **Why Server-Sent Events (SSE)?**
-   - **Lightweight Unidirectional Push**: Eliminates WebSocket handshake and bidirectional protocol overhead for dashboard telemetry.
-   - **Native Browser Semantics**: Standard `EventSource` handles reconnection automatically and transmits `Last-Event-ID`.
-   - **Proxy Resilience**: Headers (`X-Accel-Buffering: no`, `Cache-Control: no-cache, no-transform`) ensure compatibility with reverse proxies.
-
-5. **Why React Query Invalidation over Direct Client State Mutation?**
-   - **Authoritative Single Source of Truth**: Events act as lightweight triggers. The frontend refetches authoritative, canonical JSON payloads from REST endpoints, preventing client-side state divergence.
-   - **Bounded Deduplication**: `RealtimeService` maintains a FIFO set of 1,000 seen `event_id` strings to suppress duplicate frames.
-
----
-
-## 5. Worker Architecture & Operational Configuration
-
-The background outbox worker is implemented in [app/workers/outbox_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/outbox_worker.py) and executed via [app/workers/run_outbox_worker.py](file:///Users/akshatjain/Documents/SIH/back-end/app/workers/run_outbox_worker.py).
+The backend architecture separates operational responsibilities into **6 modular standalone worker daemons**:
 
 ```
+┌────────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ Worker Entrypoint      │ Operational Responsibility                                             │
+├────────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ run_scheduler          │ Polls registered ingestion adapters and dispatches typed stream events │
+│ run_ingestion_worker   │ Drains stream:weather:events, persists reports (QUEUED), stages outbox │
+│ run_observation_worker │ Drains stream:weather:observations, persists to weather_observations   │
+│ run_evidence_worker    │ Drains stream:weather:evidence, persists to evidence_items             │
+│ run_outbox_worker      │ Drains PostgreSQL realtime_outbox, relays to realtime & orchestration  │
+│ run_dispatcher         │ Drains stream:weather:orchestration, executes 5-stage IncidentPipeline │
+└────────────────────────┴────────────────────────────────────────────────────────────────────────┘
+```
+
+### Execution Commands:
+```bash
+# Ingestion scheduler
+python -m app.workers.run_scheduler
+
+# Stream consumer workers
+python -m app.workers.run_ingestion_worker
+python -m app.workers.run_observation_worker
+python -m app.workers.run_evidence_worker
+
+# Transactional outbox relay worker
 python -m app.workers.run_outbox_worker
-```
 
-### 5.1 Worker Configuration Defaults (from `app/core/config.py`)
-
-| Configuration Key | Default Value | Description |
-| :--- | :--- | :--- |
-| `OUTBOX_WORKER_ENABLED` | `True` | Master switch enabling the worker poll loop |
-| `OUTBOX_WORKER_BATCH_SIZE` | `50` | Number of pending outbox rows claimed per transaction |
-| `OUTBOX_WORKER_POLL_INTERVAL_SECONDS` | `1.0` | Polling loop interval / sleep duration when no rows are pending |
-| `OUTBOX_WORKER_MAX_ATTEMPTS` | `5` | Maximum delivery attempts before row is marked `DEAD_LETTER` |
-| `OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS` | `3600` | Periodic pruning frequency for published rows |
-| `OUTBOX_WORKER_RETENTION_HOURS` | `72` | Retention window for `PUBLISHED` rows before automated pruning |
-| `REALTIME_STREAM_NAME` | `stream:weather:realtime` | Redis Stream topic name for realtime event delivery |
-| `REALTIME_STREAM_MAXLEN` | `10000` | Maximum approximate stream buffer length |
-
-### 5.2 Worker Lifecycle & Error Handling
-- **Batch Claiming**: Uses `SELECT * FROM realtime_outbox WHERE status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= NOW()) ORDER BY created_at ASC LIMIT :batch_size FOR UPDATE SKIP LOCKED`.
-- **Exponential Retry Backoff**: When a Redis publish fails, attempts counter increments and retry delay is computed as: $\text{delay} = \min(300, 2^{\text{attempts}})\text{ seconds}$.
-- **Dead-Letter Preservation**: After reaching `max_attempts` (default 5), the row status transitions to `DEAD_LETTER` and is preserved indefinitely with `last_error` for operator inspection.
-- **Periodic Pruning**: Every `OUTBOX_WORKER_PRUNE_INTERVAL_SECONDS` (3600s), removes `PUBLISHED` rows where `published_at` is older than `OUTBOX_WORKER_RETENTION_HOURS` (72 hours).
-- **Graceful Signal Handling**: Traps `SIGTERM` and `SIGINT`, finishing the active in-flight batch before cleanly releasing database and Redis connection pools.
-
----
-
-## 6. Geospatial Map Architecture
-
-The platform provides two primary map views: the **Executive Dashboard Map** (`/dashboard`) and the **Fullscreen Live GIS Map** (`/map`).
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. BOUNDED GEOJSON VECTOR ENDPOINT (GET /api/v1/geo/incidents)│
-│ - Spatial Point Geometry (SRID 4326)                        │
-│ - Hard Server-Side Bound: LIMIT 500 features                │
-│ - Safe Handling: Reports with null coordinates are excluded │
-│ - Optional Viewport Bounding Box: min_lon,min_lat,max_lon,max_lat │
-└─────────────────────────────────────────────────────────────┘
-                               ▲
-                               │ HTTP GET (TanStack Query: incidentKeys.geoAll)
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 2. FRONTEND ADAPTER LAYER (front-end/src/features/map/adapters.ts) │
-│ - Function: geoJSONToMapPoints(featureCollection)           │
-│ - Converts GeoJSON Features to Leaflet MapIncidentPoint     │
-│ - Extracts coordinates, severity, category, credibility     │
-└─────────────────────────────────────────────────────────────┘
-                               ▲
-                               │ User Clicks Marker
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 3. LAZY DETAIL LOADING & RESILIENCE (LiveMapPage.tsx)       │
-│ - On Marker Selection: Lazy query GET /api/v1/incidents/{id}│
-│ - Fallback Resilience: If detail fetch fails (e.g. 500 error),│
-│   map remains fully usable with basic point data; no crash. │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Authoritative Aggregate Counts vs Map Features
-- **Map Features (Bounded Sample)**: Map markers represent a bounded situational sample (up to 500 points) to guarantee 60 FPS browser rendering performance.
-- **Authoritative Aggregate Counts**: National and regional macro totals (Total Reports, Verified, Under Review, High Severity) are computed strictly on the server via `GET /api/v1/dashboard/summary` across the entire database population.
-- **Frontend Query Consumer Semantics**:
-  - `fetchAllDashboardReports`: Deprecated and completely removed during the Step 13E GeoJSON migration; zero remaining consumers exist in the codebase.
-  - `fetchReportList`: Intentionally retained in `front-end/src/services/reportApi.ts` for `AdminVerificationQueuePage` (`/admin/queue`) to power the paginated, filterable operator triage table via `GET /api/v1/reports`.
-
----
-
-## 7. Analytics & Aggregation Architecture
-
-The analytics platform (`/analytics`) operates strictly on server-side SQL aggregations to eliminate heavy client-side calculation loops.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. DASHBOARD SUMMARY (GET /api/v1/dashboard/summary)         │
-│ - Aggregates total volume, verified rate, under review      │
-│ - Computes diurnal distribution and category breakdown      │
-│ - Cache Key: dashboardKeys.summary(filters)                 │
-├─────────────────────────────────────────────────────────────┤
-│ 2. TEMPORAL TRENDS (GET /api/v1/analytics/trends)           │
-│ - SQL time-bucketed progression across 24h, 7d, 30d, all-time│
-│ - Returns volume, verification progress, and incident rate  │
-│ - Cache Key: analyticsKeys.trends(filters)                  │
-├─────────────────────────────────────────────────────────────┤
-│ 3. REGIONAL DEMOGRAPHICS (GET /api/v1/analytics/regional)   │
-│ - Two-Tier Aggregation: Word-boundary city/state tokens with│
-│   spatial PostGIS bounding envelope fallback                │
-│ - Cache Key: analyticsKeys.regional(filters)                │
-└─────────────────────────────────────────────────────────────┘
+# Intelligence pipeline orchestration dispatcher
+python -m app.workers.run_dispatcher
 ```
 
 ---
 
-## 8. Verification & Triage State Machine
+## 4. Canonical 5-Stage Intelligence Pipeline
 
-The verification subsystem manages the operational lifecycle of weather reports through immutable audit events.
+The intelligence subsystem processes reports through a deterministic 5-stage pipeline:
 
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: Ingestion Complete
-    PENDING --> UNDER_REVIEW: Operator Opens Triage
-    PENDING --> VERIFIED: Operator Confirms Ground Truth
-    PENDING --> REJECTED: Operator Flags False Alarm / Hoax
-    PENDING --> DUPLICATE: Operator Merges into Existing Cluster
-
-    UNDER_REVIEW --> VERIFIED: Operator Confirms Ground Truth
-    UNDER_REVIEW --> REJECTED: Operator Flags False Alarm / Hoax
-    UNDER_REVIEW --> DUPLICATE: Operator Merges into Existing Cluster
-
-    VERIFIED --> [*]: Terminal State (Completed / Read-Only)
-    REJECTED --> [*]: Terminal State (Closed / Read-Only)
-    DUPLICATE --> [*]: Terminal State (Closed / Read-Only)
+```
+[Incident Ingested]
+        ↓
+  1. LOCATION       → Resolves coordinates/WKT geometry into PostGIS Point (SRID 4326)
+        ↓
+  2. DUPLICATE      → Queries candidates via ST_DWithin (2.5 km) & FastEmbed cosine similarity
+        ↓
+  3. EVIDENCE       → Queries spatial/temporal evidence_items and creates incident_evidence_links
+        ↓
+  4. OBSERVATION    → Queries proximate weather_observations and creates corroboration records
+        ↓
+  5. CREDIBILITY    → Evaluates multi-factor explainability score (0.0000 - 0.9800) and drivers
+        ↓
+[Persist COMPLETED] → Stages report.intelligence_ready event to realtime_outbox
 ```
 
-### Transition Enforcement Rules
-- **Terminal States**: `VERIFIED`, `REJECTED`, and `DUPLICATE` are permanent terminal states. Once an incident reaches a terminal state, subsequent mutation requests return `HTTP 409 Conflict` or are rejected by the state machine.
-- **Immutable Audit Logging**: Every transition inserts a record into `verification_events` capturing `user_id`, `previous_status`, `new_status`, `notes`, and `action_metadata`.
-- **Transactional Real-Time Emission**: Each transition atomically stages an outbox row (`report.verification_changed`), triggering immediate live dashboard updates.
+### Stage Definitions:
+1. **`LOCATION`**: Normalizes text addresses or raw latitude/longitude into a validated PostGIS point geometry (`SRID 4326`) and assigns location resolution status (`RESOLVED`, `STRUCTURED`, `FALLBACK`).
+2. **`DUPLICATE`**: Identifies co-located, concurrent reports within spatial radius ($R \le 2500\text{ m}$) and time window ($\Delta T \le 3\text{ hours}$), calculates semantic text similarity, and updates `duplicate_clusters` and `duplicate_members`.
+3. **`EVIDENCE`**: Corroborates reports against digital news articles, social posts, and official alerts stored in `evidence_items`, generating `incident_evidence_links`.
+4. **`OBSERVATION`**: Evaluates proximate Automated Weather Station (IMD AWS) rainfall/wind readings and river level gauges stored in `weather_observations`, generating `incident_observation_corroborations`.
+5. **`CREDIBILITY`**: Computes an explainable mathematical credibility score ($0.0000$ to $0.9800$) combining source trust priors, crowd volume signal, physical sensor delta, and digital evidence corroboration.
 
 ---
 
-## 9. Failure & Recovery Model Matrix
+## 5. End-to-End Data Paths
 
-| Failure Mode | System Impact | Automated Recovery Mechanism | User-Visible Effect |
-| :--- | :--- | :--- | :--- |
-| **PostgreSQL DB Crash / Outage** | API mutations and queries fail. | Database connection pool retries; FastAPI returns `HTTP 500/503`. | Error alert rendered; retry banner displayed. |
-| **Redis Outage / Unreachable** | Realtime stream unavailable; outbox worker pauses publish. | Outbox worker enters exponential backoff ($\le 300\text{ s}$); mutations remain safely staged in PostgreSQL `realtime_outbox`. | UI falls back to manual refresh; live updates pause. |
-| **Outbox Worker Process Stopped** | Realtime SSE broadcast halts. | Pending outbox rows accumulate safely in PostgreSQL. Upon worker restart, backlog drains automatically. | Live dashboard updates pause until worker process is restarted. |
-| **SSE Network Disconnection** | EventSource connection drops. | Browser native `EventSource` automatically reconnects with `Last-Event-ID` header. | Reconnection indicator displayed; missed events replayed. |
-| **Redis Stream Trimmed (Stale Client)** | Disconnected client reconnects with pruned `Last-Event-ID`. | SSE endpoint detects missing ID and emits `system.resync_required`. | Frontend automatically invalidates all caches and refetches fresh REST data. |
-| **Leaflet Marker Detail Fetch Failure** | Marker detail request returns 500. | React Query catches error; LiveMap retains lightweight point data. | Marker popup displays basic info; error fallback banner shown; map does not crash. |
-| **Duplicate Verification Action** | Operator attempts to re-verify terminal report. | State machine rejects transition with `HTTP 409 Conflict`. | UI displays warning banner indicating incident is already closed. |
+### 5.1 Citizen Report Ingestion Path
+```
+POST /api/v1/reports (Multipart form)
+    ↓
+PostgreSQL ACID Transaction
+    ├── weather_reports (status = 'QUEUED', tracking_id = 'RPT-...')
+    ├── report_media (storage metadata in MinIO)
+    ├── realtime_outbox (event_type = 'report.created')
+    └── realtime_outbox (event_type = 'orchestration.incident_ingested')
+    ↓
+Realtime Outbox Worker (run_outbox_worker)
+    ├── Relays 'report.created' → stream:weather:realtime (UI SSE)
+    └── Relays 'orchestration.incident_ingested' → stream:weather:orchestration
+    ↓
+Orchestration Dispatcher (run_dispatcher)
+    └── Executes IncidentPipeline (LOCATION → DUPLICATE → EVIDENCE → OBSERVATION → CREDIBILITY)
+    ↓
+Database Update
+    └── weather_reports (status = 'COMPLETED', credibility_score = 0.537)
+```
+
+### 5.2 External Adapter Ingestion Path
+```
+run_scheduler (polls IMD, NDMA, CWC, GDELT, Mastodon, DemoSeed)
+    ↓
+Redis Stream (stream:weather:events)
+    ↓
+Ingestion Worker (run_ingestion_worker)
+    ├── Persists WeatherReport (processing_status = 'QUEUED')
+    └── Stages outbox row (orchestration.incident_ingested)
+    ↓
+Outbox Worker → Dispatcher → IncidentPipeline → COMPLETED
+```
 
 ---
 
-## 10. Understanding the System (Study & Viva Reference)
+## 6. Realtime Delivery & Consistency Guarantees
 
-- **What problem does the product solve?**
-  Bridges the critical gap between high-altitude meteorological feeds (IMD radar/AWS) and localized ground realities (urban waterlogging, flash floods, landslides) during disasters by ingesting, deduplicating, corroborating, and scoring citizen reports alongside official telemetry.
-- **What happens when a report is submitted?**
-  The report is validated, media is saved to MinIO, and a PostgreSQL transaction atomically inserts `weather_reports` and a `realtime_outbox` event. The async intelligence pipeline then classifies the hazard, clusters co-located duplicates, checks proximate IMD weather stations, links digital news evidence, computes explainable credibility ($0.0000$–$0.9800$), and emits live updates.
-- **Why PostgreSQL + PostGIS?**
-  PostGIS provides native spatial data types (`GEOMETRY(Point, 4326)`) and GiST spatial indexes enabling microsecond spatial proximity queries (`ST_DWithin`) across millions of records.
-- **Why Transactional Outbox + Redis Streams?**
-  Guarantees zero ghost events (events are only emitted if the DB transaction succeeds) without distributed 2PC locking, while Redis Streams provides ordered in-memory buffering and cursor-based replay (`Last-Event-ID`).
-- **Why Server-Sent Events (SSE)?**
-  Lightweight unidirectional push over standard HTTP with native browser reconnect semantics, avoiding the operational complexity of bidirectional WebSockets.
-- **Why Server-Side Analytics?**
-  Offloads heavy aggregations and multi-state geospatial grouping to PostgreSQL indexes, ensuring fast client rendering without browser memory degradation.
+- **Delivery Semantics**: **At-least-once stream delivery**. Duplicate delivery is possible under network partitions or worker crash recovery.
+- **Client-Side Deduplication**: The frontend `RealtimeService` maintains a bounded FIFO ring buffer of 1,000 recent `event_id` UUIDs to suppress duplicate UI reactions.
+- **No Exactly-Once Claim**: The relevant outbox, orchestration, and client update paths are designed and tested to tolerate duplicate delivery. The system does not guarantee exactly-once processing.
+- **Outbox Retention**: Staged outbox records in `realtime_outbox` are pruned after **72 hours** (`OUTBOX_WORKER_RETENTION_HOURS=72`). Dead-letter rows are retained indefinitely.

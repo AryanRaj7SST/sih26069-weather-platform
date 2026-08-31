@@ -4,6 +4,7 @@
 **Smart India Hackathon 2026 — Problem Statement ID**: `SIH26069`
 **Category**: Big Data Analytics / Disaster Management / Public Safety
 **Target Beneficiaries**: National & State Disaster Response Forces (NDRF, SDRF), District Emergency Operations Centers (DEOCs), Municipal Corporations, Meteorological Analysts, and the General Public.
+**Status**: **SYNCHRONIZED WITH CURRENT SYSTEM SCOPE & DELIVERABLES**
 
 ---
 
@@ -17,7 +18,6 @@ The **National Weather Big Data Analytics Platform (SIH26069)** solves this gap 
 ---
 
 ## 2. Requirement Classification Framework
-To maintain rigorous documentation integrity, all platform requirements are divided into four distinct tiers:
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -25,7 +25,7 @@ To maintain rigorous documentation integrity, all platform requirements are divi
 ├───────────────────────────────────────────────────────────┤
 │ 2. Submitted Solution Concepts (Baseline Product Concept) │
 ├───────────────────────────────────────────────────────────┤
-│ 3. Engineering Decisions for MVP (Pragmatic Scope)        │
+│ 3. Engineering Decisions for MVP (Current Build Scope)    │
 ├───────────────────────────────────────────────────────────┤
 │ 4. Future Scalability & Production Extensions             │
 └───────────────────────────────────────────────────────────┘
@@ -36,8 +36,8 @@ To maintain rigorous documentation integrity, all platform requirements are divi
 ## 3. Scope & Requirement Breakdown
 
 ### Tier 1: Explicit SIH Requirements
-- **Big Data Analytics Engine**: Ability to ingest, process, and analyze heterogeneous weather data streams from multiple sources at scale. — **IMPLEMENTED** (Adapters for IMD, NDMA, CWC, Mastodon, GDELT + server-side analytics API).
-- **National Scale Geospatial Processing**: High-performance querying of spatial coordinates, bounding boxes, administrative boundaries, and proximity radii across Indian states and districts. — **IMPLEMENTED** (PostGIS `SRID 4326` + GiST indexes + bounded GeoJSON vector endpoint).
+- **Big Data Analytics Engine**: Ingest, process, and analyze heterogeneous weather data streams from multiple sources at scale. — **IMPLEMENTED** (Adapters for IMD, NDMA, CWC, Mastodon, GDELT + server-side analytics API).
+- **National Scale Geospatial Processing**: High-performance spatial coordinates, bounding boxes, and proximity queries across Indian states and districts. — **IMPLEMENTED** (PostGIS `SRID 4326` + GiST indexes + bounded GeoJSON vector endpoint).
 - **Decision Support for Disaster Management**: Actionable intelligence, severity metrics, and early trend detection for disaster response bodies. — **IMPLEMENTED** (Executive Dashboard, LiveMap, Verification Queue, Explainable Credibility Scorer).
 
 ### Tier 2: Submitted Solution Baseline Concepts
@@ -45,7 +45,7 @@ To maintain rigorous documentation integrity, all platform requirements are divi
 - **Multi-Source Ingestion**: Ingestion of IMD weather station observations, NDMA SACHET alerts, CWC river telemetry, Mastodon posts, and GDELT disaster news. — **IMPLEMENTED** (`back-end/app/ingestion/`).
 - **Intelligence & Triage Pipeline**:
   - Automated syntactic and semantic validation. — **IMPLEMENTED**
-  - Event classification (6 disaster categories). — **IMPLEMENTED**
+  - Event classification (primary disaster categories). — **IMPLEMENTED**
   - Duplicate detection and spatial-temporal clustering ($R \le 2.5\text{ km}$, $\Delta T \le 120\text{ min}$). — **IMPLEMENTED**
   - Explainable credibility scoring ($0.0000$ to $0.9800$) with transparent component breakdown. — **IMPLEMENTED**
   - Meteorological sensor corroboration against proximate IMD AWS and CWC river gauges. — **IMPLEMENTED**
@@ -63,6 +63,7 @@ To maintain rigorous documentation integrity, all platform requirements are divi
 - **Primary System of Record**: PostgreSQL 16+ with PostGIS spatial extension. — **IMPLEMENTED**
 - **Media Storage**: S3-compatible Object Storage (MinIO locally) with SHA-256 integrity verification. — **IMPLEMENTED**
 - **Transactional Real-Time Outbox & SSE**: PostgreSQL outbox table, independent worker process, Redis Streams buffer (`stream:weather:realtime`), and FastAPI Server-Sent Events (`/api/v1/events/stream`). — **IMPLEMENTED**
+- **Multi-Stream Redis Buffer**: 6 dedicated streams (`realtime`, `events`, `observations`, `evidence`, `orchestration`, `dead_letter`). — **IMPLEMENTED**
 - **State Machine for Verification**: Explicit states: `PENDING`, `UNDER_REVIEW`, `VERIFIED`, `REJECTED`, `DUPLICATE`. — **IMPLEMENTED**
 - **Lightweight AI / NLP**: Local text embedding vector similarity (FastEmbed) for semantic duplicate grouping. — **IMPLEMENTED**
 - **Single Monorepo Architecture**: Clean separation between `/front-end` (React + Vite + Tailwind + shadcn/ui) and `/back-end` (FastAPI + SQLAlchemy 2.0 Async + Pydantic v2). — **IMPLEMENTED**
@@ -97,15 +98,3 @@ journey
       Confirm verification: 5: DEOC Officer
       Observe Real-Time Dashboard Update: 5: DEOC Officer
 ```
-
----
-
-## 5. Non-Functional Requirements (NFRs) & Scope Calibration
-
-| Dimension | Target Specification & Implementation Reality | Status |
-| :--- | :--- | :---: |
-| **Ingestion Latency** | End-to-end ingestion and initial scoring in $< 1.5\text{ seconds}$ under standard load. | **MET** |
-| **Map Rendering** | Bounded GeoJSON query returning up to 500 spatial features (`LIMIT 500`) for 60 FPS Leaflet rendering; macro totals derived authoritatively from `/api/v1/dashboard/summary`. | **MET** |
-| **Availability & Resilience** | Pluggable adapter isolation; failure of external feeds does not block citizen intake or dashboard availability. | **MET** |
-| **Data Integrity** | Zero data loss for accepted citizen submissions; media SHA-256 checksums stored for auditability. | **MET** |
-| **Security & Privacy** | Citizen phone numbers and sensitive operator notes redacted from public endpoints; production OAuth2/JWT RBAC deferred. | **MET (MVP Boundary)** |
