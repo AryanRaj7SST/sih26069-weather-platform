@@ -88,6 +88,21 @@
 - **Status**: **COMPLETED & VERIFIED**
 - **Deliverables**: Authoritative alignment of all project documentation with verified codebase and runtime behavior.
 
+### Phase 16: Reactive Late Corroboration & Outbox Pipeline
+- **Status**: **COMPLETED & VERIFIED**
+- **Deliverables**:
+  - **Late Evidence & Observation Ingestion**: Ingesting late physical observations (`WeatherObservation`) or digital evidence (`EvidenceItem`) atomically stages outbox events (`orchestration.observation_corroboration_modified` / `orchestration.evidence_link_modified`).
+  - **Outbox Relay & Dispatch**: `OutboxWorker` relays events to `stream:weather:orchestration`; `OrchestrationDispatcher` executes `on_observation_ingested()` / `on_evidence_ingested()`.
+  - **Candidate Linkage & Credibility Recalculation**: Matches proximate incidents in spatial/temporal radius, creates/updates `IncidentObservationCorroboration` / `IncidentEvidenceLink`, and executes single-stage credibility recalculation via `IncidentPipeline.execute_single_stage()`.
+  - **Reactive Live Update**: Emits `report.intelligence_ready` to `stream:weather:realtime`; FastAPI SSE transports event to frontend `RealtimeService`; React Query invalidates incident queries; UI updates sensor data, evidence links, and credibility without page reload.
+  - **Failure & Duplicate Isolation**: Processing paths are designed and tested to tolerate duplicate delivery; human verification status and overrides remain strictly protected.
+
+### Phase 17: GDELT & Mastodon Live Provider Integration
+- **Status**: **COMPLETED & VERIFIED**
+- **Deliverables**:
+  - **GDELT DOC 2.0 Live Ingestion**: Live HTTP query against `http://api.gdeltproject.org/api/v2/doc/doc`; deterministic URL canonicalization and SHA-256 hashing; snippet extraction in `ArtList` mode; rate limiting ($\ge 5.0\text{s}$ interval); persistence to `evidence_items` and intelligence late corroboration.
+  - **Mastodon Public Timeline Live Ingestion**: Live HTTP query against public hashtag timelines (`https://mastodon.social/api/v1/timelines/tag/{hashtag}`); HTML sanitization; title derivation; SHA-256 deduplication; rate limiting ($\ge 1.0\text{s}$ interval); persistence to `evidence_items` and intelligence late corroboration without coordinate fabrication.
+
 ---
 
 ## 2. Post-Hackathon Future Roadmap Extensions

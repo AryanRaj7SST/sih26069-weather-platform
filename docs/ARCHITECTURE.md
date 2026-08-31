@@ -3,7 +3,7 @@
 **Problem Statement ID**: `SIH26069`
 **Platform**: National Weather Big Data Analytics Platform
 **Status**: **SYNCHRONIZED WITH CURRENT CODE & WORKER RUNTIMES**
-**Baseline Git Commit**: `8161268d19b3b6d5f2eaa9e9be8f49fd99e506a2`
+**Baseline Git Commit**: `433c600866fe9130c5ac9b13aa39cb3a45bfaed6`
 
 ---
 
@@ -222,11 +222,41 @@ Ingestion Worker (run_ingestion_worker)
 Outbox Worker → Dispatcher → IncidentPipeline → COMPLETED
 ```
 
+### 5.3 Reactive Late Corroboration Flow (Phase 16)
+```
+New Physical Observation or Digital Evidence Ingested
+    ↓
+ObservationService / EvidenceService Persists Record to DB
+    + Stages RealtimeOutbox Row (orchestration.observation_corroboration_modified OR orchestration.evidence_link_modified)
+    ↓
+Outbox Worker (run_outbox_worker) Relays Event to stream:weather:orchestration
+    ↓
+Orchestration Dispatcher (run_dispatcher) Consumes Event
+    ↓
+Triggers on_observation_ingested() OR on_evidence_ingested()
+    ├── Spatial/Temporal Candidate Query for Affected Incidents
+    ├── Creates/Updates IncidentObservationCorroboration OR IncidentEvidenceLink
+    └── Executes Single-Stage CREDIBILITY Recalculation (IncidentPipeline.execute_single_stage)
+    ↓
+Database Update on Affected Incidents (Updated credibility_score)
+    + Stages RealtimeOutbox Row (report.intelligence_ready)
+    ↓
+Outbox Worker Relays to stream:weather:realtime
+    ↓
+FastAPI SSE (/api/v1/events/stream)
+    ↓
+Frontend RealtimeService Singleton (Deduplicated SSE Message)
+    ↓
+Targeted TanStack React Query Invalidation (incidentKeys.detail(id))
+    ↓
+UI Reactive Live Update (Sensor Readings, Evidence Links, Credibility Breakdown without Page Reload)
+```
+
 ---
 
 ## 6. Realtime Delivery & Consistency Guarantees
 
 - **Delivery Semantics**: **At-least-once stream delivery**. Duplicate delivery is possible under network partitions or worker crash recovery.
 - **Client-Side Deduplication**: The frontend `RealtimeService` maintains a bounded FIFO ring buffer of 1,000 recent `event_id` UUIDs to suppress duplicate UI reactions.
-- **No Exactly-Once Claim**: The relevant outbox, orchestration, and client update paths are designed and tested to tolerate duplicate delivery. The system does not guarantee exactly-once processing.
+- **No Exactly-Once Claim**: Relevant processing paths are designed and tested to tolerate duplicate delivery. The system does not guarantee exactly-once processing.
 - **Outbox Retention**: Staged outbox records in `realtime_outbox` are pruned after **72 hours** (`OUTBOX_WORKER_RETENTION_HOURS=72`). Dead-letter rows are retained indefinitely.

@@ -3,7 +3,7 @@
 **Smart India Hackathon 2026 — Problem Statement ID**: `SIH26069`
 **Domain**: Big Data Analytics / Disaster Management / Geospatial Intelligence
 **Status**: **SYNCHRONIZED WITH CURRENT CODE & WORKER RUNTIMES**
-**Baseline Git Commit**: `8161268d19b3b6d5f2eaa9e9be8f49fd99e506a2`
+**Baseline Git Commit**: `433c600866fe9130c5ac9b13aa39cb3a45bfaed6`
 
 ---
 
@@ -16,7 +16,7 @@ The platform bridges the gap between high-altitude meteorological observations (
 - **Intelligent Pipeline**: Rule-based categorization, spatial-temporal deduplication clustering ($R \le 2.5\text{ km}$, $\Delta T \le 120\text{ min}$), and digital evidence/physical sensor corroboration.
 - **Explainable Credibility Scoring**: Deterministic, multi-factor scoring engine ($0.0000$ to $0.9800$) providing transparent driver breakdowns and uncertainty flags.
 - **Interactive Geospatial Dashboards**: Live Leaflet GIS map with bounded GeoJSON vector layers (`LIMIT 500`), server-aggregated weather analytics, and priority-ranked triage queues for disaster management authorities (NDRF, SDRF, DEOCs).
-- **Transactional Real-Time Streaming**: Atomic outbox pattern in PostgreSQL, dedicated worker relay, 6 dedicated Redis Streams topics, persistent FastAPI Server-Sent Events (`GET /api/v1/events/stream`), and automatic React Query cache invalidation.
+- **Transactional Real-Time Streaming & Reactive Corroboration**: Atomic outbox pattern in PostgreSQL, dedicated worker relay, 6 dedicated Redis Streams topics, persistent FastAPI Server-Sent Events (`GET /api/v1/events/stream`), late observation/evidence reactive corroboration, and automatic React Query cache invalidation.
 
 ---
 
@@ -70,7 +70,7 @@ The platform bridges the gap between high-altitude meteorological observations (
 3. **Stage Execution $\ne$ Domain Corroboration**: Orchestration stage outcomes (`SUCCESS_WITH_RESULTS`) signify that an analysis stage executed and found telemetry, not that the incident was verified.
 4. **Zero Client-Side Intelligence Math**: The frontend is a pure presentation consumer and never recalculates credibility, cluster embeddings, or corroboration weights.
 5. **No Binary Media in Relational Database**: All images and videos reside in S3/MinIO; only metadata, dimensions, SHA-256 checksums, and signed URIs are stored in PostgreSQL (`report_media`).
-6. **Delivery Semantics**: At-least-once stream delivery with bounded frontend deduplication (1,000 items). The system does not claim an unverified exactly-once guarantee.
+6. **Delivery Semantics**: At-least-once stream delivery with bounded frontend deduplication (1,000 items). Relevant processing paths are designed and tested to tolerate duplicate delivery without unverified claims of exactly-once.
 
 ---
 
@@ -89,7 +89,9 @@ The platform bridges the gap between high-altitude meteorological observations (
 | **Phase 13: Analytics Platform & Map** | Server-aggregated trends (`/api/v1/analytics/trends`), summary metrics, regional demographics (`/api/v1/analytics/regional`), and bounded GeoJSON queries. | **COMPLETED & VERIFIED** |
 | **Phase 14: Ingestion & Intelligence Runtime** | Multi-stream Redis topology, 6 standalone worker processes, continuous Scheduler -> Worker -> DB -> Intelligence -> SSE chains. | **COMPLETED & VERIFIED** |
 | **Phase 15: Truth Audit & Documentation** | Authoritative synchronization of all documentation, contracts, schemas, and runtime procedures. | **COMPLETED & VERIFIED** |
-| **Production Auth & Supervision** | Production JWT/RBAC authentication and multi-worker process supervision (`systemd`/Kubernetes). | *Deferred Production Hardening* |
+| **Phase 16: Reactive Late Corroboration** | Late observation & evidence ingestion re-triggers credibility scoring and pushes live updates via SSE to frontend without page reload. | **COMPLETED & VERIFIED** |
+| **Phase 17: Live GDELT & Mastodon Integration** | Genuine live HTTP ingestion from GDELT DOC 2.0 and Mastodon public hashtag timelines; persistence to `evidence_items` and intelligence corroboration. | **COMPLETED & VERIFIED** |
+| **Production Auth & Supervision** | Institutional JWT/RBAC authentication and multi-worker process supervision (`systemd`/Kubernetes). | *Deferred Production Hardening* |
 
 ---
 

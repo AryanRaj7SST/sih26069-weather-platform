@@ -37,12 +37,12 @@
 
 | Source Provider | Provider Type | Local Simulation / Test | Live Provider Status | Notes |
 | :--- | :--- | :---: | :---: | :--- |
-| **Demo Seed Feed** | Local Synthetic Feed | **Fully Verified** | **Live Local** | Deterministic generator for Mumbai/Delhi/Bengaluru weather incidents. |
+| **Demo Seed Feed** | Local Synthetic Feed | **Fully Verified** | **Live Local** | Deterministic generator for Mumbai/Delhi/Bengaluru weather incidents (development/test utility). |
 | **IMD Nowcast** | Official Weather Feed | **Fully Verified (Mock)** | Not Live Verified | Ingests IMD AWS/CAP alert format; official API requires IMD credentials. |
 | **NDMA SACHET** | National Disaster Alerts | **Fully Verified (Mock)** | Not Live Verified | Ingests CAP 1.2 XML/JSON alert feeds; production requires NDMA gateway. |
-| **CWC NWDP** | Central Water Commission | **Fully Verified (Mock)** | Not Live Verified | Ingests hydrological river level telemetry; portal uses CKAN datastore. |
-| **GDELT Project** | Global News Feed | **Unit Tested** | **Not Live Verified** | Ingests disaster news; public endpoints are rate-limited / throttled. |
-| **Mastodon** | Social Emergency Feed | **Unit Tested** | **Not Live Verified** | Queries weather hashtags; requires live instance token for high-volume streams. |
+| **CWC NWDP** | Central Water Commission | **Fully Verified (Mock)** | Not Live Verified | Ingests hydrological river level telemetry; portal uses CKAN datastore format. |
+| **GDELT Project** | Global News Feed | **Unit & Live Verified** | **LIVE PROVIDER VERIFIED** | Ingests disaster news via GDELT DOC 2.0 API (`http://api.gdeltproject.org`); rate limit interval $\ge 5.0\text{s}$; snippets only in `ArtList` mode. |
+| **Mastodon** | Social Emergency Feed | **Unit & Live Verified** | **LIVE PROVIDER VERIFIED** | Queries public disaster hashtags via `https://mastodon.social`; rate limit interval $\ge 1.0\text{s}$; text keyword matching without coordinate fabrication. |
 
 ---
 
