@@ -8,13 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.schemas import NormalizedObservationEvent
 from app.models.observation import WeatherObservation
+from app.models.outbox import RealtimeOutbox
 from app.models.source import Source
+from app.services.realtime_service import RealtimeService, realtime_service
 
 logger = logging.getLogger(__name__)
 
 
 class ObservationService:
     """Service handling persistence, idempotency, and retrieval of physical sensor observations."""
+
+    def __init__(self, realtime_svc: Optional[RealtimeService] = None) -> None:
+        self.realtime_svc = realtime_svc or realtime_service
 
     async def get_or_create_source(
         self,
@@ -48,6 +53,7 @@ class ObservationService:
         self,
         session: AsyncSession,
         event: NormalizedObservationEvent,
+        stage_outbox: bool = True,
     ) -> WeatherObservation:
         """Persist or update a normalized observation idempotently via (source_id, external_id)."""
         source = await self.get_or_create_source(
@@ -75,6 +81,7 @@ class ObservationService:
             existing = result.scalar_one_or_none()
 
         point_geom = from_shape(Point(event.longitude, event.latitude), srid=4326)
+        orch_outbox_row: Optional[RealtimeOutbox] = None
 
         if existing:
             existing.station_name = event.station_name
@@ -87,8 +94,19 @@ class ObservationService:
             existing.wind_direction_deg = event.wind_direction_deg
             existing.pressure_hpa = event.pressure_hpa
             existing.raw_metrics = event.raw_metrics
+
+            if stage_outbox:
+                orch_outbox_row = self.realtime_svc.stage_observation_orchestration_trigger(
+                    session=session,
+                    observation=existing,
+                )
+
             await session.commit()
             await session.refresh(existing)
+
+            if orch_outbox_row is not None:
+                await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
+
             logger.debug(
                 f"Updated existing observation '{existing.station_code}' ({existing.external_id})"
             )
@@ -111,8 +129,20 @@ class ObservationService:
             raw_metrics=event.raw_metrics,
         )
         session.add(observation)
+        await session.flush()
+
+        if stage_outbox:
+            orch_outbox_row = self.realtime_svc.stage_observation_orchestration_trigger(
+                session=session,
+                observation=observation,
+            )
+
         await session.commit()
         await session.refresh(observation)
+
+        if orch_outbox_row is not None:
+            await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
+
         logger.info(
             f"Persisted new observation '{observation.station_code}' "
             f"@ {observation.observed_at} ({observation.external_id})"

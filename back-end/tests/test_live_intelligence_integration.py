@@ -113,7 +113,7 @@ async def test_e2e_real_pipeline_full_execution(db_session: AsyncSession) -> Non
 
     # 2. Outbox Worker Publication to Redis Stream
     worker = RealtimeOutboxWorker(client=mock_redis)
-    await worker.publish_pending_batch(db_session)
+    await worker.publish_pending_batch(db_session, batch_size=500)
     await db_session.refresh(orch_outbox_row)
     assert orch_outbox_row.status == "PUBLISHED"
 

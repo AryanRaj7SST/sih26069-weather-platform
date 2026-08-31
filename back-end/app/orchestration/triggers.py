@@ -121,6 +121,7 @@ async def on_observation_ingested(
                 policy.spatial_radius_meters,
             ),
         )
+        .order_by(WeatherReport.occurred_at.desc())
         .limit(50)
     )
 

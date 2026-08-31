@@ -41,7 +41,6 @@ from app.orchestration.state import (
     load_orchestration_state,
     update_stage_state,
 )
-from app.services.realtime_service import realtime_service
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +150,8 @@ class IncidentPipeline:
 
         outbox_row = None
         if state.overall_readiness == OverallReadiness.INTELLIGENCE_READY:
+            from app.services.realtime_service import realtime_service
+
             outbox_row = realtime_service.stage_intelligence_ready(
                 session=db,
                 report=current_report,
@@ -161,6 +162,8 @@ class IncidentPipeline:
         if commit:
             await db.commit()
             if outbox_row is not None:
+                from app.services.realtime_service import realtime_service
+
                 await realtime_service.publish_staged_outbox(outbox_row)
 
         logger.info(
@@ -231,8 +234,27 @@ class IncidentPipeline:
             summary=result.results_summary,
         )
 
+        outbox_row = None
+        if stage_name == StageName.CREDIBILITY and result.outcome in (
+            StageOutcome.SUCCESS_WITH_RESULTS,
+            StageOutcome.SUCCESS_WITH_NO_MATCH,
+            StageOutcome.SUCCESS_WITH_INSUFFICIENT_DATA,
+        ):
+            from app.services.realtime_service import realtime_service
+
+            outbox_row = realtime_service.stage_intelligence_ready(
+                session=db,
+                report=locked_report,
+                credibility_score=float(locked_report.credibility_score or 0.0),
+                readiness="INTELLIGENCE_READY",
+            )
+
         if commit:
             await db.commit()
+            if outbox_row is not None:
+                from app.services.realtime_service import realtime_service
+
+                await realtime_service.publish_staged_outbox(outbox_row)
 
         return result
 

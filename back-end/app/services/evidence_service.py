@@ -6,13 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.schemas import NormalizedEvidenceEvent
 from app.models.evidence import EvidenceItem
+from app.models.outbox import RealtimeOutbox
 from app.models.source import Source
+from app.services.realtime_service import RealtimeService, realtime_service
 
 logger = logging.getLogger(__name__)
 
 
 class EvidenceService:
     """Service handling persistence, idempotency, and retrieval of secondary evidence items."""
+
+    def __init__(self, realtime_svc: Optional[RealtimeService] = None) -> None:
+        self.realtime_svc = realtime_svc or realtime_service
 
     async def get_or_create_source(
         self,
@@ -46,6 +51,7 @@ class EvidenceService:
         self,
         session: AsyncSession,
         event: NormalizedEvidenceEvent,
+        stage_outbox: bool = True,
     ) -> EvidenceItem:
         """Persist or update an external evidence item idempotently via (source_id, external_id)."""
         source = await self.get_or_create_source(
@@ -60,6 +66,8 @@ class EvidenceService:
         result = await session.execute(stmt)
         existing: Optional[EvidenceItem] = result.scalar_one_or_none()
 
+        orch_outbox_row: Optional[RealtimeOutbox] = None
+
         if existing:
             existing.title = event.title
             existing.url = event.url
@@ -69,8 +77,19 @@ class EvidenceService:
             existing.text_snippet = event.text_snippet
             existing.sha256_hash = event.sha256_hash
             existing.raw_payload = event.raw_payload
+
+            if stage_outbox:
+                orch_outbox_row = self.realtime_svc.stage_evidence_orchestration_trigger(
+                    session=session,
+                    evidence=existing,
+                )
+
             await session.commit()
             await session.refresh(existing)
+
+            if orch_outbox_row is not None:
+                await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
+
             logger.debug(
                 f"Updated existing evidence item '{existing.external_id}' "
                 f"({existing.publisher_domain})"
@@ -92,8 +111,20 @@ class EvidenceService:
             raw_payload=event.raw_payload,
         )
         session.add(evidence)
+        await session.flush()
+
+        if stage_outbox:
+            orch_outbox_row = self.realtime_svc.stage_evidence_orchestration_trigger(
+                session=session,
+                evidence=evidence,
+            )
+
         await session.commit()
         await session.refresh(evidence)
+
+        if orch_outbox_row is not None:
+            await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
+
         logger.info(
             f"Persisted new evidence item '{evidence.external_id}' ({evidence.publisher_domain})"
         )

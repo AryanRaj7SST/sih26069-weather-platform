@@ -481,5 +481,87 @@ class RealtimeService:
         session.add(outbox_row)
         return outbox_row
 
+    def stage_evidence_orchestration_trigger(
+        self,
+        session: AsyncSession,
+        evidence: Any,
+    ) -> RealtimeOutbox:
+        """Stage an orchestration.evidence_link_modified event in the outbox table."""
+        from app.orchestration.events import (
+            AggregateType,
+            OrchestrationEvent,
+            OrchestrationEventType,
+        )
+
+        orch_event = OrchestrationEvent(
+            event_id=uuid.uuid4(),
+            event_type=OrchestrationEventType.EVIDENCE_LINK_MODIFIED,
+            aggregate_type=AggregateType.EVIDENCE_ITEM,
+            aggregate_id=evidence.id,
+            producer="evidence_worker",
+            correlation_id=str(evidence.id),
+            idempotency_key=f"evidence-link-{evidence.id}",
+            payload={
+                "evidence_id": str(evidence.id),
+                "external_id": getattr(evidence, "external_id", None),
+                "title": getattr(evidence, "title", None),
+            },
+        )
+
+        outbox_row = RealtimeOutbox(
+            event_id=orch_event.event_id,
+            event_type="orchestration.evidence_link_modified",
+            entity_id=str(evidence.id),
+            tracking_id=None,
+            occurred_at=datetime.now(timezone.utc),
+            payload=orch_event.model_dump(mode="json"),
+            status="PENDING",
+            attempts=0,
+            max_attempts=5,
+        )
+        session.add(outbox_row)
+        return outbox_row
+
+    def stage_observation_orchestration_trigger(
+        self,
+        session: AsyncSession,
+        observation: Any,
+    ) -> RealtimeOutbox:
+        """Stage an orchestration.observation_corroboration_modified event in the outbox table."""
+        from app.orchestration.events import (
+            AggregateType,
+            OrchestrationEvent,
+            OrchestrationEventType,
+        )
+
+        orch_event = OrchestrationEvent(
+            event_id=uuid.uuid4(),
+            event_type=OrchestrationEventType.OBSERVATION_CORROBORATION_MODIFIED,
+            aggregate_type=AggregateType.WEATHER_OBSERVATION,
+            aggregate_id=observation.id,
+            producer="observation_worker",
+            correlation_id=str(observation.id),
+            idempotency_key=f"observation-corr-{observation.id}",
+            payload={
+                "observation_id": str(observation.id),
+                "station_code": getattr(observation, "station_code", None),
+                "station_name": getattr(observation, "station_name", None),
+            },
+        )
+
+        outbox_row = RealtimeOutbox(
+            event_id=orch_event.event_id,
+            event_type="orchestration.observation_corroboration_modified",
+            entity_id=str(observation.id),
+            tracking_id=None,
+            occurred_at=datetime.now(timezone.utc),
+            payload=orch_event.model_dump(mode="json"),
+            status="PENDING",
+            attempts=0,
+            max_attempts=5,
+        )
+        session.add(outbox_row)
+        return outbox_row
+
 
 realtime_service = RealtimeService()
