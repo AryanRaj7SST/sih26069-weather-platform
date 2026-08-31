@@ -50,7 +50,7 @@ erDiagram
 | `evidence_items` | `EvidenceItem` | `app/models/evidence.py` | `0002_evidence_and_corroboration_schema`| Digital news articles, social posts, and alerts |
 | `incident_evidence_links`| `IncidentEvidenceLink`| `app/models/evidence.py`| `0002_evidence_and_corroboration_schema`| Association between incidents and evidence items |
 | `incident_observation_corroborations`| `IncidentObservationCorroboration`| `app/models/corroboration.py`| `0002_evidence_and_corroboration_schema`| Physical sensor proximity corroborations |
-| `realtime_outbox` | `RealtimeOutbox` | `app/models/outbox.py` | `0004_realtime_outbox_schema` | Transactional outbox for guaranteed event staging |
+| `realtime_outbox` | `RealtimeOutbox` | `app/models/outbox.py` | `0004_realtime_outbox_schema` | Transactional outbox for durable event staging |
 
 ---
 

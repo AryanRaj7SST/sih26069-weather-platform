@@ -3,7 +3,7 @@
 **Problem Statement ID**: `SIH26069`
 **Platform**: National Weather Big Data Analytics Platform
 **Status**: **SYNCHRONIZED WITH CURRENT CODE & WORKER RUNTIMES**
-**Baseline Git Commit**: `433c600866fe9130c5ac9b13aa39cb3a45bfaed6`
+**Baseline Git Commit**: `cca26615d1743078932527ec1e89507ac417fa03`
 
 ---
 
@@ -43,14 +43,14 @@ flowchart TD
 
     subgraph Intelligence_Engine["4. 5-Stage Incident Intelligence Pipeline"]
         S_LOC["1. LOCATION (Geocoding & Spatial Geometry)"]
-        S_DUP["2. DUPLICATE (PostGIS ST_DWithin + FastEmbed Cosine)"]
+        S_DUP["2. DUPLICATE (PostGIS ST_DWithin + TF-IDF Vectorizer)"]
         S_EVD["3. EVIDENCE (Cross-Platform Digital News Linking)"]
         S_OBS["4. OBSERVATION (Physical Weather Sensor Corroboration)"]
         S_CRD["5. CREDIBILITY (Explainable Multi-Factor Scoring)"]
     end
 
     subgraph Storage_Tier["5. System of Record & Object Storage"]
-        PG[("PostgreSQL 16 + PostGIS (15 Tables, SRID 4326)")]
+        PG[("PostgreSQL 16 + PostGIS (17 Tables, SRID 4326)")]
         MINIO[("MinIO / S3 Storage (Media Blobs)")]
         OUTBOX[("Transactional Outbox (realtime_outbox)")]
     end
@@ -166,7 +166,7 @@ The intelligence subsystem processes reports through a deterministic 5-stage pip
         ↓
   1. LOCATION       → Resolves coordinates/WKT geometry into PostGIS Point (SRID 4326)
         ↓
-  2. DUPLICATE      → Queries candidates via ST_DWithin (2.5 km) & FastEmbed cosine similarity
+  2. DUPLICATE      → Queries candidates via ST_DWithin (2.5 km) & TF-IDF n-gram cosine similarity
         ↓
   3. EVIDENCE       → Queries spatial/temporal evidence_items and creates incident_evidence_links
         ↓
@@ -179,7 +179,7 @@ The intelligence subsystem processes reports through a deterministic 5-stage pip
 
 ### Stage Definitions:
 1. **`LOCATION`**: Normalizes text addresses or raw latitude/longitude into a validated PostGIS point geometry (`SRID 4326`) and assigns location resolution status (`RESOLVED`, `STRUCTURED`, `FALLBACK`).
-2. **`DUPLICATE`**: Identifies co-located, concurrent reports within spatial radius ($R \le 2500\text{ m}$) and time window ($\Delta T \le 3\text{ hours}$), calculates semantic text similarity, and updates `duplicate_clusters` and `duplicate_members`.
+2. **`DUPLICATE`**: Identifies co-located, concurrent reports within spatial radius ($R \le 2500\text{ m}$) and time window ($\Delta T \le 3\text{ hours}$), calculates semantic text similarity via domain-boosted TF-IDF n-grams (`sparse_tfidf_ngram_v1`), and updates `duplicate_clusters` and `duplicate_members`.
 3. **`EVIDENCE`**: Corroborates reports against digital news articles, social posts, and official alerts stored in `evidence_items`, generating `incident_evidence_links`.
 4. **`OBSERVATION`**: Evaluates proximate Automated Weather Station (IMD AWS) rainfall/wind readings and river level gauges stored in `weather_observations`, generating `incident_observation_corroborations`.
 5. **`CREDIBILITY`**: Computes an explainable mathematical credibility score ($0.0000$ to $0.9800$) combining source trust priors, crowd volume signal, physical sensor delta, and digital evidence corroboration.

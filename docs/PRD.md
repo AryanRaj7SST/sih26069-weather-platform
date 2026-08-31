@@ -65,7 +65,7 @@ The **National Weather Big Data Analytics Platform (SIH26069)** solves this gap 
 - **Transactional Real-Time Outbox & SSE**: PostgreSQL outbox table, independent worker process, Redis Streams buffer (`stream:weather:realtime`), and FastAPI Server-Sent Events (`/api/v1/events/stream`). — **IMPLEMENTED**
 - **Multi-Stream Redis Buffer**: 6 dedicated streams (`realtime`, `events`, `observations`, `evidence`, `orchestration`, `dead_letter`). — **IMPLEMENTED**
 - **State Machine for Verification**: Explicit states: `PENDING`, `UNDER_REVIEW`, `VERIFIED`, `REJECTED`, `DUPLICATE`. — **IMPLEMENTED**
-- **Lightweight AI / NLP**: Local text embedding vector similarity (FastEmbed) for semantic duplicate grouping. — **IMPLEMENTED**
+- **Lightweight AI / NLP**: Domain-boosted TF-IDF / N-gram sparse vector similarity (`sparse_tfidf_ngram_v1`) for semantic duplicate grouping. — **IMPLEMENTED**
 - **Single Monorepo Architecture**: Clean separation between `/front-end` (React + Vite + Tailwind + shadcn/ui) and `/back-end` (FastAPI + SQLAlchemy 2.0 Async + Pydantic v2). — **IMPLEMENTED**
 
 ### Tier 4: Future Scalability & Production Extensions

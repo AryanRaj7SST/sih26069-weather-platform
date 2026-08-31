@@ -3,7 +3,7 @@
 **Smart India Hackathon 2026 — Problem Statement ID**: `SIH26069`
 **Domain**: Big Data Analytics / Disaster Management / Geospatial Intelligence
 **Status**: **SYNCHRONIZED WITH CURRENT CODE & WORKER RUNTIMES**
-**Baseline Git Commit**: `433c600866fe9130c5ac9b13aa39cb3a45bfaed6`
+**Baseline Git Commit**: `cca26615d1743078932527ec1e89507ac417fa03`
 
 ---
 
@@ -35,7 +35,7 @@ The platform bridges the gap between high-altitude meteorological observations (
     ├── stream:weather:evidence     → run_evidence_worker
     ├── stream:weather:orchestration→ run_dispatcher (5-Stage Pipeline)
     ├── stream:weather:realtime     → FastAPI SSE (/api/v1/events/stream)
-    └── stream:weather:dead_letter  → Dead Letter Monitor
+    └── stream:weather:dead_letter  → Dead Letter Sink (Programmatic/Manual Replay)
                               │
                               ▼
         [PostgreSQL 16 + PostGIS] ◄──► [MinIO / S3 Storage]
@@ -78,7 +78,7 @@ The platform bridges the gap between high-altitude meteorological observations (
 
 | Subsystem / Phase | Scope & Implementation Status | Verification Status |
 | :--- | :--- | :---: |
-| **Phase 0–3: Foundation & Schemas** | PostgreSQL 16 + PostGIS, 15 declarative models, spatial GiST indexes, Alembic migrations (`0001`–`0004`). | **COMPLETED & VERIFIED** |
+| **Phase 0–3: Foundation & Schemas** | PostgreSQL 16 + PostGIS, 15 domain models (17 relational tables), spatial GiST indexes, Alembic migrations (`0001`–`0004`). | **COMPLETED & VERIFIED** |
 | **Phase 4: Citizen Intake** | Multi-part report intake, photo upload to MinIO, GPS geocoding, public tracking. | **COMPLETED & VERIFIED** |
 | **Phase 5–6: Ingestion & Streaming** | Adapters for IMD AWS, NDMA SACHET, CWC, Mastodon, GDELT; Redis Stream workers. | **COMPLETED & VERIFIED** |
 | **Phase 7–9: AI Intelligence Engine** | Deduplication clustering, digital evidence linking, physical station corroboration, explainable credibility scorer. | **COMPLETED & VERIFIED** |
@@ -91,6 +91,7 @@ The platform bridges the gap between high-altitude meteorological observations (
 | **Phase 15: Truth Audit & Documentation** | Authoritative synchronization of all documentation, contracts, schemas, and runtime procedures. | **COMPLETED & VERIFIED** |
 | **Phase 16: Reactive Late Corroboration** | Late observation & evidence ingestion re-triggers credibility scoring and pushes live updates via SSE to frontend without page reload. | **COMPLETED & VERIFIED** |
 | **Phase 17: Live GDELT & Mastodon Integration** | Genuine live HTTP ingestion from GDELT DOC 2.0 and Mastodon public hashtag timelines; persistence to `evidence_items` and intelligence corroboration. | **COMPLETED & VERIFIED** |
+| **Phase 18: NDMA/CWC Live Proof & Duplicate Truth** | Live HTTP verification of NDMA SACHET and CWC NWDP feeds; verified domain-boosted TF-IDF vectorizer (`sparse_tfidf_ngram_v1`) duplicate path. | **COMPLETED & VERIFIED** |
 | **Production Auth & Supervision** | Institutional JWT/RBAC authentication and multi-worker process supervision (`systemd`/Kubernetes). | *Deferred Production Hardening* |
 
 ---
@@ -102,16 +103,21 @@ The platform bridges the gap between high-altitude meteorological observations (
 - Node.js 18+ and npm
 - Docker & Docker Compose (for PostgreSQL/PostGIS, Redis, and MinIO)
 
-### 1. Start Infrastructure
+### 1. Start Infrastructure Containers
 ```bash
 docker compose up -d
 ```
 
-### 2. Start Backend API Server
+### 2. Apply Database Migrations & Start Backend API Server
 ```bash
 cd back-end
 source .venv/bin/activate
-.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Apply Alembic schema migrations (17 relational tables)
+alembic upgrade head
+
+# Start FastAPI server on port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### 3. Start Background Workers
@@ -120,7 +126,7 @@ In separate terminal tabs / background sessions:
 cd back-end
 source .venv/bin/activate
 
-# Outbox Relay Worker (Relays DB outbox to Redis Streams)
+# Transactional Outbox Relay Worker (Relays DB outbox to Redis Streams)
 python -m app.workers.run_outbox_worker
 
 # Orchestration Dispatcher (Executes 5-Stage Intelligence Pipeline)
@@ -130,16 +136,28 @@ python -m app.workers.run_dispatcher
 python -m app.workers.run_ingestion_worker
 python -m app.workers.run_observation_worker
 python -m app.workers.run_evidence_worker
+
+# Ingestion Polling Scheduler (Optional / On-Demand for Live Feeds)
+python -m app.workers.run_scheduler
 ```
 
-### 4. Start Frontend Client
-```bash
-cd front-end
-npm install
-npm run dev
-```
+### Terminal Summary Table
+
+| Terminal | Target Subsystem | Command | Operational Purpose |
+| :---: | :--- | :--- | :--- |
+| **1** | Docker Infrastructure | `docker compose up -d` | PostgreSQL 16 (5432), Redis 7 (6379), MinIO (9000/9001) |
+| **2** | Migrations & Backend API | `alembic upgrade head && uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` | Database schema initialization & FastAPI REST / SSE server |
+| **3** | Frontend Web Client | `npm run dev` (run `npm install` on first setup) | React 18 / Vite operator dashboard on `http://localhost:5173` |
+| **4** | Outbox Relay Worker | `python -m app.workers.run_outbox_worker` | Polls PostgreSQL `realtime_outbox`, publishes to Redis Streams |
+| **5** | Orchestration Dispatcher | `python -m app.workers.run_dispatcher` | Consumes `stream:weather:orchestration`, runs 5-stage pipeline |
+| **6** | Incident Ingestion Worker | `python -m app.workers.run_ingestion_worker` | Consumes `stream:weather:events`, writes to `weather_reports` |
+| **7** | Observation Worker | `python -m app.workers.run_observation_worker` | Consumes `stream:weather:observations`, writes to `weather_observations` |
+| **8** | Evidence Worker | `python -m app.workers.run_evidence_worker` | Consumes `stream:weather:evidence`, writes to `evidence_items` |
+| **9** | Ingestion Polling Scheduler | `python -m app.workers.run_scheduler` | Polls registered external adapters, dispatches to Redis Streams |
 
 The application is available at `http://localhost:5173`.
+Backend health endpoint: `curl http://127.0.0.1:8000/api/v1/health`
+For detailed configuration, environment variables, and troubleshooting, consult [docs/EXTERNAL_SETUP.md](docs/EXTERNAL_SETUP.md).
 
 ---
 

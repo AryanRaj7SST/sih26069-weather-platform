@@ -38,7 +38,7 @@
 
 ### Phase 8: AI Intelligence — Spatial-Temporal Deduplication & Clustering
 - **Status**: **COMPLETED & VERIFIED**
-- **Deliverables**: PostGIS spatial radius clustering ($R \le 2.5\text{ km}$, $\Delta T \le 120\text{ min}$), FastEmbed cosine text similarity, and cluster centroid tracking (`duplicate_clusters`).
+- **Deliverables**: PostGIS spatial radius clustering ($R \le 2.5\text{ km}$, $\Delta T \le 120\text{ min}$), domain-boosted TF-IDF n-gram cosine text similarity (`sparse_tfidf_ngram_v1`), and cluster centroid tracking (`duplicate_clusters`).
 
 ### Phase 9: AI Intelligence — Explainable Credibility Scoring Engine
 - **Status**: **COMPLETED & VERIFIED**
@@ -101,7 +101,15 @@
 - **Status**: **COMPLETED & VERIFIED**
 - **Deliverables**:
   - **GDELT DOC 2.0 Live Ingestion**: Live HTTP query against `http://api.gdeltproject.org/api/v2/doc/doc`; deterministic URL canonicalization and SHA-256 hashing; snippet extraction in `ArtList` mode; rate limiting ($\ge 5.0\text{s}$ interval); persistence to `evidence_items` and intelligence late corroboration.
-  - **Mastodon Public Timeline Live Ingestion**: Live HTTP query against public hashtag timelines (`https://mastodon.social/api/v1/timelines/tag/{hashtag}`); HTML sanitization; title derivation; SHA-256 deduplication; rate limiting ($\ge 1.0\text{s}$ interval); persistence to `evidence_items` and intelligence late corroboration without coordinate fabrication.
+  - **Mastodon Public Timeline Live Ingestion**: Live HTTP query against public hashtag timelines (`https://mastodon.social/api/v1/timelines/tag/{hashtag}`); HTML sanitization; title derivation; SHA-256 deduplication; rate limiting ($\ge 1.0\text{s}$ interval); persistence to `evidence_items` without coordinate fabrication.
+
+### Phase 18: NDMA/CWC Live Provider Proof & Duplicate Algorithm Truth Audit
+- **Status**: **COMPLETED & VERIFIED**
+- **Deliverables**:
+  - **NDMA SACHET Live Verification**: Real HTTP POST to `https://sachet.ndma.gov.in/cap_public_website/FetchAllAlertDetails`, 66 alerts parsed, normalized, streamed to `stream:weather:events`, persisted as `WeatherReport` in PostgreSQL.
+  - **CWC NWDP Live Verification**: Real HTTP GET to `https://nwdp.nwic.gov.in/api/3/action/datastore_search` on resource `d80798b9-4b11-4626-8b63-964202ba7216`, 5 live hydrological telemetry records parsed in controlled Phase 18 proof (adapter default fetch limit: 50), normalized, streamed to `stream:weather:observations`, persisted as `WeatherObservation` in PostgreSQL.
+  - **Duplicate Algorithm Truth**: Verified exact duplicate pipeline using PostGIS GiST index-assisted spatial bounding ($R \le 2500\text{m}$), temporal windowing ($\Delta T \le 3\text{h}$), and `SemanticVectorizer` (`sparse_tfidf_ngram_v1`) composite scoring with 4 hard gates. Confirmed zero FastEmbed/ONNX dependencies in live duplicate path.
+  - **GDELT Rate Limit Enforcement**: Verified `GDELT_MIN_REQUEST_INTERVAL_SECONDS = 5.0` is strictly enforced in `GDELTNewsAdapter._apply_rate_limit()` before every outbound HTTP request.
 
 ---
 

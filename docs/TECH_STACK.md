@@ -21,7 +21,7 @@
 │                                 BACKEND                                     │
 │  Python 3.11+ / 3.14  •  FastAPI  •  Pydantic v2  •  SQLAlchemy 2.0 (Async) │
 │  GeoAlchemy2  •  Alembic (Migrations)  •  httpx (Async Ingestion HTTP)     │
-│  FastEmbed / Sentence-Transformers (Local Dense Embeddings)                 │
+│  Domain-Boosted TF-IDF / N-Gram Vectorizer (sparse_tfidf_ngram_v1)          │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       ▲
                                       │ Database Driver / Redis Protocol / S3 SDK
@@ -72,9 +72,9 @@
 ## 3. AI & Data Intelligence Strategy
 
 1. **Deterministic Rule Engine**: First-pass spam filtering, boundary checking, and threshold categorization.
-2. **Local Text Embeddings (`FastEmbed` / `sentence-transformers`)**:
-   - Generates compact vector embeddings for report text without requiring external GPU infrastructure.
-   - Used for semantic duplicate candidate grouping.
+2. **Domain-Boosted TF-IDF / N-Gram Semantic Vectorizer (`sparse_tfidf_ngram_v1`)**:
+   - Generates sparse n-gram and domain-boosted term vectors for report text without requiring heavy external model runtimes or GPU dependencies.
+   - Used for semantic duplicate candidate grouping and cosine similarity evaluation in `app/intelligence/semantic_similarity.py`.
 3. **Transparent Credibility Engine**:
    - Deterministic multi-factor formula based on verifiable metrics (source class prior, quality score, crowd volume signal, digital evidence provenance, physical station delta).
 4. **Targeted LLM Invocation (Optional Cloud/Local Fallback)**:
