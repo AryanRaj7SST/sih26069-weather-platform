@@ -44,3 +44,7 @@ minio_data/
 pyrefly.toml
 *.swp
 *.swo
+
+# Scratch & temporary test artifacts
+scratch/
+back-end/scratch/
