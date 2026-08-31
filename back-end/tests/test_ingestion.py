@@ -207,7 +207,21 @@ async def test_persistence_and_idempotency_path():
         assert report1.external_id == unique_ext_id
         assert report1.tracking_id.startswith("RPT-")
         assert report1.verification_status == "PENDING"
-        assert report1.processing_status == "COMPLETED"
+        assert report1.processing_status == "QUEUED"
+
+        # Verify orchestration trigger outbox row was staged with valid
+        # non-null aggregate_id == report1.id
+        from app.models.outbox import RealtimeOutbox
+
+        orch_stmt = select(RealtimeOutbox).where(
+            RealtimeOutbox.entity_id == str(report1.id),
+            RealtimeOutbox.event_type == "orchestration.incident_ingested",
+        )
+        orch_res = await session.execute(orch_stmt)
+        orch_row = orch_res.scalar_one_or_none()
+        assert orch_row is not None
+        assert orch_row.payload["aggregate_id"] == str(report1.id)
+        assert orch_row.payload["event_type"] == "incident.ingested"
 
         first_report_id = report1.id
         first_tracking_id = report1.tracking_id

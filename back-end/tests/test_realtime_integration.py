@@ -68,7 +68,10 @@ async def test_e2e_report_creation_mutation_to_outbox_to_redis_event(
         assert persisted_report.title == "E2E Realtime Report Ingestion"
 
         # 2. Verify RealtimeOutbox row persisted in PostgreSQL
-        stmt_out = select(RealtimeOutbox).where(RealtimeOutbox.entity_id == str(report.id))
+        stmt_out = select(RealtimeOutbox).where(
+            RealtimeOutbox.entity_id == str(report.id),
+            RealtimeOutbox.event_type == "report.created",
+        )
         res_out = await db_session.execute(stmt_out)
         outbox_row = res_out.scalar_one_or_none()
         assert outbox_row is not None
@@ -76,27 +79,38 @@ async def test_e2e_report_creation_mutation_to_outbox_to_redis_event(
         assert outbox_row.status == "PENDING"
         assert outbox_row.tracking_id == report.tracking_id
 
-        # 3. Verify Redis xadd was called with canonical payload
-        mock_redis.xadd.assert_called_once()
-        call_args = mock_redis.xadd.call_args
-        stream_name, fields = call_args[0]
-        assert stream_name == "stream:weather:realtime"
-        assert fields["event_type"] == "report.created"
-        assert fields["entity_id"] == str(report.id)
-        assert fields["tracking_id"] == report.tracking_id
-        assert fields["event_id"] == str(outbox_row.event_id)
+        # Verify orchestration outbox row also persisted
+        stmt_orch = select(RealtimeOutbox).where(
+            RealtimeOutbox.entity_id == str(report.id),
+            RealtimeOutbox.event_type == "orchestration.incident_ingested",
+        )
+        res_orch = await db_session.execute(stmt_orch)
+        orch_row = res_orch.scalar_one_or_none()
+        assert orch_row is not None
+        assert orch_row.status == "PENDING"
+
+        # 3. Verify Redis xadd was called for both streams (realtime UI + orchestration)
+        assert mock_redis.xadd.call_count == 2
+        calls = mock_redis.xadd.call_args_list
+        stream_names = {call[0][0] for call in calls}
+        assert "stream:weather:realtime" in stream_names
+        assert "stream:weather:orchestration" in stream_names
 
         # 4. Verify OutboxWorker transitions outbox to PUBLISHED
         worker = RealtimeOutboxWorker(client=mock_redis)
         published_count, failed_count = await worker.publish_pending_batch(
             session=db_session, batch_size=10
         )
-        assert published_count >= 1
+        assert published_count >= 2
         assert failed_count == 0
 
         await db_session.refresh(outbox_row)
         assert outbox_row.status == "PUBLISHED"
         assert outbox_row.published_at is not None
+
+        await db_session.refresh(orch_row)
+        assert orch_row.status == "PUBLISHED"
+        assert orch_row.published_at is not None
 
     finally:
         # Cleanup
@@ -305,7 +319,10 @@ async def test_e2e_redis_failure_keeps_outbox_pending_for_worker_recovery(
         assert res_rep.scalar_one_or_none() is not None
 
         # 3. RealtimeOutbox row remains PENDING
-        stmt_out = select(RealtimeOutbox).where(RealtimeOutbox.entity_id == str(report.id))
+        stmt_out = select(RealtimeOutbox).where(
+            RealtimeOutbox.entity_id == str(report.id),
+            RealtimeOutbox.event_type == "report.created",
+        )
         res_out = await db_session.execute(stmt_out)
         outbox_row = res_out.scalar_one_or_none()
         assert outbox_row is not None
@@ -321,14 +338,14 @@ async def test_e2e_redis_failure_keeps_outbox_pending_for_worker_recovery(
             session=db_session,
             batch_size=10,
         )
-        assert published_count >= 1
+        assert published_count >= 2
         assert failed_count == 0
 
         # 5. Outbox row is now PUBLISHED
         await db_session.refresh(outbox_row)
         assert outbox_row.status == "PUBLISHED"
         assert outbox_row.published_at is not None
-        mock_recovered_redis.xadd.assert_called_once()
+        assert mock_recovered_redis.xadd.call_count >= 2
 
     finally:
         # Cleanup

@@ -257,7 +257,10 @@ async def test_multi_worker_skip_locked_concurrency(db_session: AsyncSession):
 
     # Total published = 6, 0 duplicates
     db_session.expire_all()
-    stmt = select(RealtimeOutbox).where(RealtimeOutbox.status == "PUBLISHED")
+    stmt = select(RealtimeOutbox).where(
+        RealtimeOutbox.event_id.in_(event_ids),
+        RealtimeOutbox.status == "PUBLISHED",
+    )
     res = await db_session.execute(stmt)
     published_rows = list(res.scalars().all())
     assert len(published_rows) == 6

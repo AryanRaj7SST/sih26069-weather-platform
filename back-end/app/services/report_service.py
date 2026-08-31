@@ -197,11 +197,18 @@ class ReportService:
                 has_media=len(media_records) > 0,
             )
 
+            # Stage independent orchestration trigger in the same atomic transaction
+            orch_outbox_row = self.realtime_svc.stage_orchestration_trigger(
+                session=session,
+                report=report,
+            )
+
             await session.commit()
             await session.refresh(report)
 
             # Fast-path publish to Redis Stream (worker retries if this fails or network blips)
             await self.realtime_svc.publish_staged_outbox(outbox_row)
+            await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
 
             return report, len(media_records)
 
@@ -523,10 +530,12 @@ class ReportService:
         category_id, reported_cat = await self.resolve_category(
             session, event.category_code or "OTHER"
         )
+        report_id = uuid.uuid4()
         tracking_id = self.generate_tracking_id()
         point_geom = WKTElement(f"POINT({event.longitude} {event.latitude})", srid=4326)
 
         report = WeatherReport(
+            id=report_id,
             tracking_id=tracking_id,
             source_id=source.id,
             external_id=event.external_id,
@@ -540,7 +549,7 @@ class ReportService:
             latitude=event.latitude,
             longitude=event.longitude,
             occurred_at=event.occurred_at,
-            processing_status="COMPLETED",
+            processing_status="QUEUED",
             verification_status="PENDING",
             credibility_score=0.0,
             raw_payload=event.raw_payload,
@@ -553,6 +562,11 @@ class ReportService:
             report=report,
             category_code=reported_cat,
             has_media=False,
+        )
+
+        orch_outbox_row = self.realtime_svc.stage_orchestration_trigger(
+            session=session,
+            report=report,
         )
 
         await session.commit()
@@ -570,6 +584,7 @@ class ReportService:
 
         # Fast-path publish to Redis Stream
         await self.realtime_svc.publish_staged_outbox(outbox_row)
+        await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
 
         return persisted
 

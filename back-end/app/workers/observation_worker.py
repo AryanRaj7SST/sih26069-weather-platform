@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import List, Optional, Tuple
 
@@ -68,6 +69,47 @@ class ObservationWorker:
                     results.append((msg_id, None))
 
         return results
+
+    async def run_loop(
+        self,
+        stop_event: Optional[asyncio.Event] = None,
+        interval: float = 1.0,
+        count: int = 10,
+        block_ms: int = 2000,
+    ) -> None:
+        """Continuously process observations from observation stream until stop_event is set."""
+        logger.info("Starting ObservationWorker continuous polling loop...")
+        while stop_event is None or not stop_event.is_set():
+            try:
+                await self.process_batch(count=count, block_ms=block_ms)
+                if stop_event is not None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info("ObservationWorker loop received cancellation signal")
+                break
+            except Exception as e:
+                logger.error(
+                    "Unexpected error in ObservationWorker loop; sleeping %.2fs: %s",
+                    interval,
+                    e,
+                    exc_info=True,
+                )
+                if stop_event is not None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(interval)
+
+        logger.info("ObservationWorker loop stopped cleanly")
 
 
 observation_worker = ObservationWorker()

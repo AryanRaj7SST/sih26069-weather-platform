@@ -70,18 +70,32 @@ class RealtimeOutboxWorker:
         failed_count = 0
 
         for row in pending_rows:
-            payload_fields = {
-                "event_id": str(row.event_id),
-                "event_type": row.event_type,
-                "occurred_at": row.occurred_at.isoformat(),
-                "entity_id": str(row.entity_id),
-                "tracking_id": row.tracking_id or "",
-                "payload": json.dumps(row.payload),
-            }
+            if row.event_type.startswith("orchestration."):
+                target_stream = "stream:weather:orchestration"
+                orch_dict = row.payload
+                payload_fields = {
+                    "event_id": str(orch_dict.get("event_id", row.event_id)),
+                    "event_type": orch_dict.get("event_type", row.event_type),
+                    "aggregate_type": orch_dict.get("aggregate_type", ""),
+                    "aggregate_id": orch_dict.get("aggregate_id", row.entity_id),
+                    "correlation_id": orch_dict.get("correlation_id", ""),
+                    "attempt": str(orch_dict.get("attempt", row.attempts + 1)),
+                    "data": json.dumps(orch_dict),
+                }
+            else:
+                target_stream = self.stream_name
+                payload_fields = {
+                    "event_id": str(row.event_id),
+                    "event_type": row.event_type,
+                    "occurred_at": row.occurred_at.isoformat(),
+                    "entity_id": str(row.entity_id),
+                    "tracking_id": row.tracking_id or "",
+                    "payload": json.dumps(row.payload),
+                }
 
             try:
                 msg_id = await self.client.xadd(
-                    self.stream_name,
+                    target_stream,
                     payload_fields,
                     max_len=self.maxlen,
                     approximate=True,
@@ -94,7 +108,7 @@ class RealtimeOutboxWorker:
                     "Outbox worker published event %s (%s) to %s: %s",
                     row.event_id,
                     row.event_type,
-                    self.stream_name,
+                    target_stream,
                     msg_id,
                 )
             except Exception as e:
@@ -141,18 +155,32 @@ class RealtimeOutboxWorker:
         if row is None:
             return False
 
-        payload_fields = {
-            "event_id": str(row.event_id),
-            "event_type": row.event_type,
-            "occurred_at": row.occurred_at.isoformat(),
-            "entity_id": str(row.entity_id),
-            "tracking_id": row.tracking_id or "",
-            "payload": json.dumps(row.payload),
-        }
+        if row.event_type.startswith("orchestration."):
+            target_stream = "stream:weather:orchestration"
+            orch_dict = row.payload
+            payload_fields = {
+                "event_id": str(orch_dict.get("event_id", row.event_id)),
+                "event_type": orch_dict.get("event_type", row.event_type),
+                "aggregate_type": orch_dict.get("aggregate_type", ""),
+                "aggregate_id": orch_dict.get("aggregate_id", row.entity_id),
+                "correlation_id": orch_dict.get("correlation_id", ""),
+                "attempt": str(orch_dict.get("attempt", row.attempts + 1)),
+                "data": json.dumps(orch_dict),
+            }
+        else:
+            target_stream = self.stream_name
+            payload_fields = {
+                "event_id": str(row.event_id),
+                "event_type": row.event_type,
+                "occurred_at": row.occurred_at.isoformat(),
+                "entity_id": str(row.entity_id),
+                "tracking_id": row.tracking_id or "",
+                "payload": json.dumps(row.payload),
+            }
 
         try:
             await self.client.xadd(
-                self.stream_name,
+                target_stream,
                 payload_fields,
                 max_len=self.maxlen,
                 approximate=True,

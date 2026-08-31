@@ -208,34 +208,49 @@ class RealtimeService:
         outbox: RealtimeOutbox,
     ) -> Optional[str]:
         """Publish a previously committed outbox event to Redis Streams (fast path)."""
-        payload_fields: Dict[str, Any] = {
-            "event_id": str(outbox.event_id),
-            "event_type": outbox.event_type,
-            "occurred_at": outbox.occurred_at.isoformat(),
-            "entity_id": str(outbox.entity_id),
-            "tracking_id": outbox.tracking_id or "",
-            "payload": json.dumps(outbox.payload),
-        }
+        if outbox.event_type.startswith("orchestration."):
+            target_stream = "stream:weather:orchestration"
+            orch_dict = outbox.payload if isinstance(outbox.payload, dict) else {}
+            payload_fields: Dict[str, Any] = {
+                "event_id": str(orch_dict.get("event_id", outbox.event_id)),
+                "event_type": orch_dict.get("event_type", outbox.event_type),
+                "aggregate_type": orch_dict.get("aggregate_type", ""),
+                "aggregate_id": str(orch_dict.get("aggregate_id", outbox.entity_id)),
+                "correlation_id": orch_dict.get("correlation_id", ""),
+                "attempt": str(orch_dict.get("attempt", outbox.attempts + 1)),
+                "data": json.dumps(orch_dict),
+            }
+        else:
+            target_stream = self.stream_name
+            payload_fields = {
+                "event_id": str(outbox.event_id),
+                "event_type": outbox.event_type,
+                "occurred_at": outbox.occurred_at.isoformat(),
+                "entity_id": str(outbox.entity_id),
+                "tracking_id": outbox.tracking_id or "",
+                "payload": json.dumps(outbox.payload),
+            }
 
         try:
             msg_id = await self.client.xadd(
-                self.stream_name,
+                target_stream,
                 payload_fields,
                 max_len=self.maxlen,
                 approximate=True,
             )
             logger.info(
-                "Published staged realtime outbox event '%s' (%s) to '%s': %s",
+                "Published staged outbox event '%s' (%s) to '%s': %s",
                 outbox.event_id,
                 outbox.event_type,
-                self.stream_name,
+                target_stream,
                 msg_id,
             )
             return msg_id
         except Exception as e:
             logger.warning(
-                "Fast-path Redis publish failed for event '%s'; worker will retry: %s",
+                "Fast-path Redis publish failed for event '%s' to '%s'; worker will retry: %s",
                 outbox.event_id,
+                target_stream,
                 e,
             )
             return None
@@ -424,6 +439,47 @@ class RealtimeService:
             payload=payload.model_dump(mode="json"),
         )
         return await self.publish_event(event)
+
+    def stage_orchestration_trigger(
+        self,
+        session: AsyncSession,
+        report: WeatherReport,
+    ) -> RealtimeOutbox:
+        """Stage an orchestration.incident_ingested event in the outbox table.
+
+        This reuses the RealtimeOutbox table to guarantee transactional atomicity
+        with the report creation, while ensuring independent retry semantics from the
+        frontend SSE events.
+        """
+        from app.orchestration.events import (
+            AggregateType,
+            OrchestrationEvent,
+            OrchestrationEventType,
+        )
+
+        orch_event = OrchestrationEvent(
+            event_id=uuid.uuid4(),
+            event_type=OrchestrationEventType.INCIDENT_INGESTED,
+            aggregate_type=AggregateType.WEATHER_REPORT,
+            aggregate_id=report.id,
+            producer="rest_api",
+            correlation_id=report.tracking_id or str(uuid.uuid4()),
+            idempotency_key=f"ingest-{report.id}",
+        )
+
+        outbox_row = RealtimeOutbox(
+            event_id=orch_event.event_id,
+            event_type="orchestration.incident_ingested",
+            entity_id=str(report.id),
+            tracking_id=report.tracking_id,
+            occurred_at=datetime.now(timezone.utc),
+            payload=orch_event.model_dump(mode="json"),
+            status="PENDING",
+            attempts=0,
+            max_attempts=5,
+        )
+        session.add(outbox_row)
+        return outbox_row
 
 
 realtime_service = RealtimeService()

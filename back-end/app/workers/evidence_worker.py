@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import List, Optional, Tuple
 
@@ -68,6 +69,47 @@ class EvidenceWorker:
                     results.append((msg_id, None))
 
         return results
+
+    async def run_loop(
+        self,
+        stop_event: Optional[asyncio.Event] = None,
+        interval: float = 1.0,
+        count: int = 10,
+        block_ms: int = 2000,
+    ) -> None:
+        """Continuously process evidence from stream:weather:evidence until stop_event is set."""
+        logger.info("Starting EvidenceWorker continuous polling loop...")
+        while stop_event is None or not stop_event.is_set():
+            try:
+                await self.process_batch(count=count, block_ms=block_ms)
+                if stop_event is not None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info("EvidenceWorker loop received cancellation signal")
+                break
+            except Exception as e:
+                logger.error(
+                    "Unexpected error in EvidenceWorker loop; sleeping %.2fs: %s",
+                    interval,
+                    e,
+                    exc_info=True,
+                )
+                if stop_event is not None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(interval)
+
+        logger.info("EvidenceWorker loop stopped cleanly")
 
 
 evidence_worker = EvidenceWorker()

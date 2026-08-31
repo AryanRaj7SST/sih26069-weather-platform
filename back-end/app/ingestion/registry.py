@@ -33,7 +33,10 @@ class AdapterRegistry:
         return None
 
     def list_adapters(self) -> List[Any]:
-        """List all active registered adapters."""
+        """List all active registered adapters, instantiating factories if needed."""
+        for code in list(self._factories.keys()):
+            if code not in self._adapters:
+                self.get(code)
         return list(self._adapters.values())
 
     def clear(self) -> None:

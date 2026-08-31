@@ -207,10 +207,11 @@ async def test_citizen_report_creation_publishes_realtime_event(db_session: Asyn
     assert report.id is not None
     assert media_count == 0
 
-    mock_realtime.publish_staged_outbox.assert_called_once()
-    outbox_arg = mock_realtime.publish_staged_outbox.call_args[0][0]
-    assert outbox_arg.entity_id == str(report.id)
-    assert outbox_arg.event_type == "report.created"
+    assert mock_realtime.publish_staged_outbox.call_count == 2
+    outbox_calls = [call[0][0] for call in mock_realtime.publish_staged_outbox.call_args_list]
+    event_types = {outbox.event_type for outbox in outbox_calls}
+    assert "report.created" in event_types
+    assert "orchestration.incident_ingested" in event_types
 
 
 @pytest.mark.asyncio
@@ -221,7 +222,8 @@ async def test_verification_transition_publishes_realtime_event(db_session: Asyn
 
     report_svc = ReportService(realtime_svc=mock_realtime)
 
-    # 1. Create report in PENDING state
+    # 1. Create report in PENDING state (calls publish_staged_outbox 2x:
+    # report.created + orchestration.incident_ingested)
     payload = CitizenReportCreate(
         latitude=19.0178,
         longitude=72.8478,
@@ -233,7 +235,8 @@ async def test_verification_transition_publishes_realtime_event(db_session: Asyn
     )
     report, _ = await report_svc.create_citizen_report(session=db_session, payload=payload)
 
-    # 2. Transition PENDING -> VERIFIED
+    # 2. Transition PENDING -> VERIFIED (calls publish_staged_outbox 1x:
+    # report.verification_changed)
     updated_report = await report_svc.update_verification_status(
         session=db_session,
         report_id_or_tracking=str(report.id),
@@ -242,7 +245,7 @@ async def test_verification_transition_publishes_realtime_event(db_session: Asyn
     )
 
     assert updated_report.verification_status == "VERIFIED"
-    assert mock_realtime.publish_staged_outbox.call_count == 2
+    assert mock_realtime.publish_staged_outbox.call_count == 3
     last_outbox_arg = mock_realtime.publish_staged_outbox.call_args[0][0]
     assert last_outbox_arg.entity_id == str(report.id)
     assert last_outbox_arg.event_type == "report.verification_changed"

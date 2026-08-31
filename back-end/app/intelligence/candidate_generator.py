@@ -54,6 +54,14 @@ class CandidateGenerator:
         time_min = occurred_at - self.max_window
         time_max = occurred_at + self.max_window
 
+        if isinstance(geom, str):
+            if geom.startswith(("SRID=", "POINT")):
+                target_geog = func.ST_GeogFromText(geom)
+            else:
+                target_geog = func.ST_GeogFromWKB(func.decode(geom, "hex"))
+        else:
+            target_geog = func.ST_GeogFromWKB(geom)
+
         try:
             # Query candidates up to limit + 1 to detect truncation safely
             query = (
@@ -64,14 +72,14 @@ class CandidateGenerator:
                     WeatherReport.occurred_at <= time_max,
                     func.ST_DWithin(
                         cast(WeatherReport.geom, Geography),
-                        cast(geom, Geography),
+                        target_geog,
                         self.max_radius,
                     ),
                 )
                 .order_by(
                     func.ST_Distance(
                         cast(WeatherReport.geom, Geography),
-                        cast(geom, Geography),
+                        target_geog,
                     ).asc()
                 )
                 .limit(query_limit + 1)
