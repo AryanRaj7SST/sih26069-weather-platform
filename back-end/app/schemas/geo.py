@@ -31,6 +31,7 @@ class GeoJSONIncidentProperties(BaseModel):
     category_code: str
     severity: str
     credibility_score: float
+    credibility_reason: Optional[str] = None
     verification_status: str
     readiness: str
     occurred_at: str

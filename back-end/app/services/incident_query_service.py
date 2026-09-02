@@ -238,6 +238,8 @@ class IncidentQueryService:
                 occurred_at=r.occurred_at,
                 verification_status=r.verification_status,
                 credibility_score=r.credibility_score,
+                credibility_reason=r.credibility_reason,
+                credibility_explanation=r.credibility_explanation,
                 readiness=self._extract_readiness(r),
                 media_count=len(r.media) if r.media else 0,
                 created_at=r.created_at,
@@ -326,8 +328,14 @@ class IncidentQueryService:
 
         # Credibility summary
         cred_exp = None
+        pos_drivers: List[str] = []
+        neg_drivers: List[str] = []
+        flags: List[str] = []
         if report.credibility_explanation and isinstance(report.credibility_explanation, dict):
-            cred_exp = report.credibility_explanation.get("explanation_text")
+            cred_exp = report.credibility_explanation.get("explanation_text") or report.credibility_explanation.get("explanation")
+            pos_drivers = report.credibility_explanation.get("positive_drivers") or []
+            neg_drivers = report.credibility_explanation.get("negative_drivers") or []
+            flags = report.credibility_explanation.get("uncertainty_flags") or []
         elif isinstance(report.credibility_explanation, str):
             cred_exp = report.credibility_explanation
 
@@ -335,6 +343,10 @@ class IncidentQueryService:
             score=report.credibility_score,
             is_machine_assessed=True,
             explanation=cred_exp,
+            reason=report.credibility_reason,
+            positive_drivers=pos_drivers,
+            negative_drivers=neg_drivers,
+            uncertainty_flags=flags,
         )
 
         # Verification summary
@@ -883,6 +895,8 @@ class IncidentQueryService:
                 occurred_at=r.occurred_at,
                 verification_status=r.verification_status,
                 credibility_score=r.credibility_score,
+                credibility_reason=r.credibility_reason,
+                credibility_explanation=r.credibility_explanation,
                 readiness=self._extract_readiness(r),
                 media_count=len(r.media) if r.media else 0,
                 created_at=r.created_at,
@@ -943,6 +957,7 @@ class IncidentQueryService:
                         category_code=cat_code,
                         severity=r.severity,
                         credibility_score=r.credibility_score,
+                        credibility_reason=r.credibility_reason,
                         verification_status=r.verification_status,
                         readiness=self._extract_readiness(r).value,
                         occurred_at=r.occurred_at.isoformat(),

@@ -137,6 +137,48 @@ class WeatherReport(Base):
         nullable=False,
     )
 
+    @property
+    def credibility_reason(self) -> str:
+        """Extract a clear, concise human-readable reason for the machine credibility score."""
+        expl = self.credibility_explanation
+        score = self.credibility_score
+
+        if not expl or not isinstance(expl, dict):
+            if score is not None and score >= 0.80:
+                return f"High machine credibility ({(score * 100):.0f}%) based on authoritative source."
+            elif score is not None and score >= 0.50:
+                return f"Moderate machine credibility ({(score * 100):.0f}%) based on baseline intake."
+            elif score is not None and score > 0.0:
+                return f"Low machine credibility ({(score * 100):.0f}%); uncorroborated intake report."
+            return "Pending machine credibility evaluation."
+
+        pos = expl.get("positive_drivers") or []
+        neg = expl.get("negative_drivers") or []
+        flags = expl.get("uncertainty_flags") or []
+
+        reasons = []
+        if pos:
+            reasons.append(str(pos[0]))
+        if neg:
+            reasons.append(str(neg[0]))
+
+        if reasons:
+            return " ".join(reasons)
+
+        if flags:
+            return str(flags[0])
+
+        raw_text = expl.get("explanation")
+        if raw_text and isinstance(raw_text, str):
+            lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
+            if len(lines) > 1:
+                return lines[1]
+            elif lines:
+                return lines[0]
+
+        pct = f"{(score * 100):.0f}%" if score is not None else "0%"
+        return f"Machine credibility score of {pct} assigned."
+
     # Relationships
     source: Mapped["Source"] = relationship(
         "Source",
