@@ -8,6 +8,21 @@ interface LocationGateModalProps {
   onClose: () => void;
 }
 
+const POPULAR_CITIES = [
+  { name: 'Mumbai', lat: 19.0760, lon: 72.8777, label: 'Mumbai, MH' },
+  { name: 'Delhi', lat: 28.6139, lon: 77.2090, label: 'Delhi / NCR' },
+  { name: 'Bengaluru', lat: 12.9716, lon: 77.5946, label: 'Bengaluru, KA' },
+  { name: 'Chennai', lat: 13.0827, lon: 80.2707, label: 'Chennai, TN' },
+  { name: 'Kolkata', lat: 22.5726, lon: 88.3639, label: 'Kolkata, WB' },
+  { name: 'Hyderabad', lat: 17.3850, lon: 78.4867, label: 'Hyderabad, TS' },
+  { name: 'Pune', lat: 18.5204, lon: 73.8567, label: 'Pune, MH' },
+  { name: 'Jaipur', lat: 26.9124, lon: 75.7873, label: 'Jaipur, RJ' },
+  { name: 'Ahmedabad', lat: 23.0225, lon: 72.5714, label: 'Ahmedabad, GJ' },
+  { name: 'Guwahati', lat: 26.1445, lon: 91.7362, label: 'Guwahati, AS' },
+  { name: 'Kochi', lat: 9.9312, lon: 76.2673, label: 'Kochi, KL' },
+  { name: 'Bhubaneswar', lat: 20.2961, lon: 85.8245, label: 'Bhubaneswar, OD' },
+];
+
 export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, onClose }) => {
   const { setCoords } = useLocationScope();
   const [isLocating, setIsLocating] = useState(false);
@@ -49,9 +64,9 @@ export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, on
       (err) => {
         setIsLocating(false);
         if (err.code === err.PERMISSION_DENIED) {
-          setGeoError('Location permission denied. Please enter your city or district manually.');
+          setGeoError('Location permission denied in browser. Click the 📍 icon in your address bar to Allow, or pick a city below.');
         } else {
-          setGeoError('Unable to detect location. Please search for your city below.');
+          setGeoError('Unable to detect location. Please select a city below or search manually.');
         }
       },
       { timeout: 10000, enableHighAccuracy: true }
@@ -83,6 +98,11 @@ export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, on
     onClose();
   };
 
+  const handleSelectPreset = async (city: typeof POPULAR_CITIES[0]) => {
+    await setCoords(city.lat, city.lon, city.label);
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
       <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
@@ -101,7 +121,12 @@ export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, on
         {geoError && (
           <div className="mt-4 flex items-start space-x-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 border border-amber-200/80">
             <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <span>{geoError}</span>
+            <div className="space-y-1">
+              <p className="font-semibold">{geoError}</p>
+              <p className="text-[11px] text-amber-700">
+                You can also instantly select one of the popular cities below with 1-click.
+              </p>
+            </div>
           </div>
         )}
 
@@ -118,7 +143,26 @@ export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, on
           </button>
         </div>
 
-        <div className="my-5 flex items-center space-x-3 text-xs text-slate-400">
+        {/* Quick Popular Cities */}
+        <div className="mt-4">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            Popular Cities (1-Click Setup)
+          </p>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+            {POPULAR_CITIES.map((city) => (
+              <button
+                key={city.name}
+                type="button"
+                onClick={() => handleSelectPreset(city)}
+                className="inline-flex items-center space-x-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer"
+              >
+                <span>📍 {city.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="my-4 flex items-center space-x-3 text-xs text-slate-400">
           <div className="h-px flex-1 bg-slate-200" />
           <span className="font-semibold uppercase tracking-wider">or search manually</span>
           <div className="h-px flex-1 bg-slate-200" />
@@ -167,7 +211,7 @@ export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, on
         </div>
 
         {/* Footer info */}
-        <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 text-[11px] text-slate-400">
+        <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-400">
           <div className="flex items-center space-x-1">
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
             <span>Strict privacy: location is kept local in your session.</span>
@@ -175,7 +219,7 @@ export const LocationGateModal: React.FC<LocationGateModalProps> = ({ isOpen, on
           <button
             type="button"
             onClick={onClose}
-            className="font-bold text-slate-500 hover:text-slate-700"
+            className="font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
           >
             Skip for now
           </button>
