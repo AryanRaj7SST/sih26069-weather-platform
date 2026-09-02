@@ -106,8 +106,9 @@ class ReportService:
         session: AsyncSession,
         payload: CitizenReportCreate,
         media_files: Optional[List[UploadFile]] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> Tuple[WeatherReport, int]:
-        """Process and persist a citizen weather report with optional media uploads."""
+        """Process and persist a citizen weather report with optional media uploads and user linking."""
         uploaded_keys: List[str] = []
         report_id = uuid.uuid4()
         tracking_id = self.generate_tracking_id()
@@ -147,22 +148,20 @@ class ReportService:
                         )
                         uploaded_keys.append(storage_key)
 
-                        media_records.append(
-                            ReportMedia(
-                                report_id=report_id,
-                                media_type=media_type,
-                                storage_bucket=settings.S3_BUCKET_NAME,
-                                storage_key=storage_key,
-                                mime_type=content_type,
-                                file_size_bytes=file_size,
-                                sha256_hash=sha256_hash,
-                            )
+                        media = ReportMedia(
+                            id=uuid.uuid4(),
+                            report_id=report_id,
+                            media_type=media_type,
+                            storage_bucket=settings.S3_BUCKET_NAME,
+                            storage_key=storage_key,
+                            mime_type=content_type,
+                            file_size_bytes=file_size,
+                            sha256_hash=sha256_hash,
                         )
+                        media_records.append(media)
 
-            # 3. Construct spatial PostGIS Point
-            point_wkt = f"POINT({payload.longitude} {payload.latitude})"
-            geom = WKTElement(point_wkt, srid=4326)
-
+            # 3. Create WeatherReport entity with geometry
+            geom = WKTElement(f"POINT({payload.longitude} {payload.latitude})", srid=4326)
             occurred_time = payload.occurred_at or datetime.now(timezone.utc)
 
             # 4. Instantiate WeatherReport entity
@@ -170,6 +169,7 @@ class ReportService:
                 id=report_id,
                 tracking_id=tracking_id,
                 source_id=source.id,
+                user_id=user_id,
                 category_id=category_id,
                 reported_category=reported_category,
                 severity=payload.severity,

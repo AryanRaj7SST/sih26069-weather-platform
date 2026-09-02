@@ -1,33 +1,139 @@
-"""Authentication API Router for Operator Login and Token Management."""
+"""Authentication API Router for Citizen & Operator Login and Token Management."""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_operator
+from app.api.deps import get_current_operator, get_current_user
 from app.core.rate_limiter import login_rate_limiter
-from app.core.security import create_access_token, create_sse_ticket, revoke_token, verify_password
+from app.core.security import (
+    create_access_token,
+    create_sse_ticket,
+    get_password_hash,
+    revoke_token,
+    verify_password,
+)
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, OperatorProfile, TokenResponse, TokenResponseData
+from app.schemas.auth import (
+    LoginRequest,
+    SignupRequest,
+    TokenResponse,
+    TokenResponseData,
+    UserProfile,
+)
 
 router = APIRouter()
+
+
+@router.post(
+    "/signup",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Citizen Self-Registration",
+    description="Registers a new citizen account with email and password, forcing role='CITIZEN' server-side, and returns an authenticated JWT session.",
+)
+async def signup_citizen(
+    payload: SignupRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Register new citizen account (forces role=CITIZEN)."""
+    clean_email = payload.email.strip().lower()
+
+    # 1. Check if email already registered
+    stmt = select(User).where(User.email.ilike(clean_email))
+    res = await db.execute(stmt)
+    existing_user = res.scalar_one_or_none()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "EMAIL_ALREADY_EXISTS",
+                "message": f"An account with email '{clean_email}' already exists. Please log in instead.",
+            },
+        )
+
+    # 2. Basic password strength check
+    if len(payload.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "WEAK_PASSWORD",
+                "message": "Password must be at least 8 characters long.",
+            },
+        )
+
+    if payload.password.lower() == clean_email:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "WEAK_PASSWORD",
+                "message": "Password cannot be identical to your email address.",
+            },
+        )
+
+    # 3. Create citizen user (ALWAYS server-enforced role CITIZEN)
+    hashed_pwd = get_password_hash(payload.password)
+    user = User(
+        email=clean_email,
+        full_name=payload.full_name.strip(),
+        hashed_password=hashed_pwd,
+        role="CITIZEN",
+        is_active=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    # 4. Generate JWT access token
+    access_token = create_access_token(
+        subject=str(user.id),
+        role="CITIZEN",
+        extra_claims={
+            "email": user.email,
+            "full_name": user.full_name,
+        },
+    )
+
+    profile = UserProfile(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role="CITIZEN",
+        jurisdiction_code=None,
+        home_location_lat=user.home_location_lat,
+        home_location_lng=user.home_location_lng,
+        home_location_name=user.home_location_name,
+        alert_radius_km=user.alert_radius_km or 25.0,
+    )
+
+    return TokenResponse(
+        success=True,
+        data=TokenResponseData(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in_seconds=86400,
+            user=profile,
+            operator=profile,
+        ),
+    )
 
 
 @router.post(
     "/login",
     response_model=TokenResponse,
     status_code=status.HTTP_200_OK,
-    summary="Operator Login Authentication",
-    description="Authenticates disaster management operator credentials and returns a signed 24h JWT bearer token with sliding window rate limiting.",
+    summary="Unified User & Operator Login Authentication",
+    description="Authenticates credentials for both citizens and operators, returning a signed 24h JWT bearer token and user profile.",
 )
-async def login_operator(
+async def login_user(
     payload: LoginRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    """Authenticate operator by email/username and password with rate limiting protection."""
-    # 1. Rate Limiting Check (Client IP / Username bucket)
+    """Authenticate user/operator by email/username and password with rate limiting protection."""
+    # 1. Rate Limiting Check (Client IP bucket)
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"login:{client_ip}"
     if not login_rate_limiter.is_allowed(rate_key):
@@ -70,12 +176,16 @@ async def login_operator(
         },
     )
 
-    profile = OperatorProfile(
+    profile = UserProfile(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
         role=user.role,
-        jurisdiction_code="NATIONAL_DEOC",
+        jurisdiction_code=user.jurisdiction_code or ("NATIONAL_DEOC" if user.role in ("OPERATOR", "ADMIN") else None),
+        home_location_lat=user.home_location_lat,
+        home_location_lng=user.home_location_lng,
+        home_location_name=user.home_location_name,
+        alert_radius_km=user.alert_radius_km or 25.0,
     )
 
     return TokenResponse(
@@ -84,8 +194,33 @@ async def login_operator(
             access_token=access_token,
             token_type="bearer",
             expires_in_seconds=86400,
+            user=profile,
             operator=profile,
         ),
+    )
+
+
+@router.get(
+    "/me",
+    response_model=UserProfile,
+    status_code=status.HTTP_200_OK,
+    summary="Get Authenticated User Profile",
+    description="Returns the profile and saved preferences of the currently authenticated user.",
+)
+async def get_my_profile(
+    current_user: User = Depends(get_current_user),
+) -> UserProfile:
+    """Retrieve current authenticated profile."""
+    return UserProfile(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        jurisdiction_code=current_user.jurisdiction_code,
+        home_location_lat=current_user.home_location_lat,
+        home_location_lng=current_user.home_location_lng,
+        home_location_name=current_user.home_location_name,
+        alert_radius_km=current_user.alert_radius_km or 25.0,
     )
 
 
@@ -112,21 +247,21 @@ async def generate_sse_ticket(
 @router.post(
     "/logout",
     status_code=status.HTTP_200_OK,
-    summary="Operator Logout & Token Revocation",
+    summary="Logout & Token Revocation",
     description="Revokes the current JWT bearer access token, invalidating any active sessions across the platform.",
 )
-async def logout_operator(
+async def logout_user(
     authorization: str = Header(..., description="Bearer access token to revoke"),
-    _operator: User = Depends(get_current_operator),
+    _user: User = Depends(get_current_user),
 ) -> dict:
-    """Explicitly revoke token and terminate operator session."""
+    """Explicitly revoke token and terminate user session."""
     token = authorization.replace("Bearer ", "").strip()
     if token:
         revoke_token(token)
     return {
         "success": True,
         "data": {
-            "message": "Operator session revoked successfully.",
+            "message": "Session revoked successfully.",
         },
     }
 

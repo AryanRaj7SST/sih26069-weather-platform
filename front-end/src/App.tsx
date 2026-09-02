@@ -18,6 +18,8 @@ import { NationalMapPage } from '@/pages/NationalMapPage';
 import { AdminVerificationQueuePage } from '@/pages/AdminVerificationQueuePage';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { SignupPage } from '@/pages/SignupPage';
+import { MyReportsPage } from '@/pages/MyReportsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,9 +54,17 @@ export function App() {
               <Route path="/report" element={<CitizenReportPage />} />
               <Route path="/track-report" element={<TrackReportPage />} />
               <Route
+                path="/my-reports"
+                element={
+                  <ProtectedRoute roles={['CITIZEN', 'ADMIN']}>
+                    <MyReportsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/admin/queue"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={['OPERATOR', 'ADMIN']}>
                     <AdminVerificationQueuePage />
                   </ProtectedRoute>
                 }
@@ -65,6 +75,7 @@ export function App() {
               />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

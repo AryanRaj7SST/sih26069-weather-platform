@@ -22,7 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 export const Navbar: React.FC = () => {
   const location = useLocation();
   const { i18n, t } = useTranslation();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, user, isOperator, isCitizen, logout } = useAuth();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toolsDropdownOpen, setToolsDropdownOpen] = useState(false);
@@ -47,7 +47,7 @@ export const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Primary desktop navigation links
+  // Primary navigation links
   const primaryLinks = [
     { name: t('nav.home', 'Home'), path: '/' },
     { name: t('nav.citizenArea', 'Citizen Area'), path: '/citizen-dashboard' },
@@ -79,7 +79,16 @@ export const Navbar: React.FC = () => {
     },
   ];
 
-  if (isAuthenticated) {
+  if (isCitizen) {
+    toolItems.push({
+      name: 'My Submitted Reports',
+      path: '/my-reports',
+      icon: FileText,
+      desc: 'View status and review updates on your reports',
+    });
+  }
+
+  if (isOperator) {
     toolItems.push({
       name: t('nav.verificationQueue', 'Operator Triage Queue'),
       path: '/admin/queue',
@@ -186,8 +195,8 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Operator Triage Shortcut if authenticated */}
-          {isAuthenticated && (
+          {/* Quick Role Shortcuts if authenticated */}
+          {isOperator && (
             <Link
               to="/admin/queue"
               className={`relative flex h-full items-center px-1.5 2xl:px-2 py-1 text-xs font-bold whitespace-nowrap transition-colors ${
@@ -199,6 +208,22 @@ export const Navbar: React.FC = () => {
               <span className="flex items-center space-x-1 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
                 <ShieldCheck className="h-3 w-3 text-emerald-600" />
                 <span>Triage Queue</span>
+              </span>
+            </Link>
+          )}
+
+          {isCitizen && (
+            <Link
+              to="/my-reports"
+              className={`relative flex h-full items-center px-1.5 2xl:px-2 py-1 text-xs font-bold whitespace-nowrap transition-colors ${
+                location.pathname === '/my-reports'
+                  ? 'text-blue-600 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-blue-600'
+                  : 'text-emerald-700 hover:text-emerald-800'
+              }`}
+            >
+              <span className="flex items-center space-x-1 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+                <FileText className="h-3 w-3 text-emerald-600" />
+                <span>My Reports</span>
               </span>
             </Link>
           )}
@@ -224,23 +249,34 @@ export const Navbar: React.FC = () => {
 
           {isAuthenticated ? (
             <div className="flex items-center space-x-1.5 shrink-0">
+              <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                {user?.role || 'User'}
+              </span>
               <button
                 type="button"
                 onClick={logout}
                 className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
-                title="Logout Operator Session"
+                title="Logout Session"
               >
                 <LogOut className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           ) : (
-            <Link
-              to="/login"
-              className="hidden sm:inline-flex items-center text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/80 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors shrink-0"
-            >
-              {t('nav.login', 'Operator Login')}
-            </Link>
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <Link
+                to="/login"
+                className="inline-flex items-center text-xs font-bold text-slate-700 hover:text-blue-600 px-2 py-1 rounded-lg transition-colors shrink-0"
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/signup"
+                className="hidden sm:inline-flex items-center text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded-lg transition-colors shrink-0 shadow-2xs"
+              >
+                Citizen Sign Up
+              </Link>
+            </div>
           )}
 
           <button

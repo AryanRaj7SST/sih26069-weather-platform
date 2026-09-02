@@ -145,3 +145,110 @@ async def test_community_feedback_vote_endpoint():
         assert vote_data["confirm_count"] >= 1
         assert vote_data["user_voted"] is True
         assert vote_data["voted_type"] == "CONFIRM"
+
+
+@pytest.mark.asyncio
+async def test_citizen_signup_forces_citizen_role_and_autologin():
+    """Test POST /api/v1/auth/signup registers citizen and always enforces CITIZEN role."""
+    unique_email = f"citizen_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as ac:
+        res = await ac.post(
+            "/api/v1/auth/signup",
+            json={
+                "email": unique_email,
+                "password": "ValidPassword123!",
+                "full_name": "Aarav Sharma",
+            },
+        )
+        assert res.status_code == 201
+        data = res.json()["data"]
+        assert "access_token" in data
+        assert data["user"]["email"] == unique_email
+        assert data["user"]["role"] == "CITIZEN"
+
+        # Attempt duplicate signup with same email -> 409 Conflict
+        dup_res = await ac.post(
+            "/api/v1/auth/signup",
+            json={
+                "email": unique_email,
+                "password": "ValidPassword123!",
+                "full_name": "Aarav Sharma Duplicate",
+            },
+        )
+        assert dup_res.status_code == 409
+        assert dup_res.json()["error"]["code"] == "EMAIL_ALREADY_EXISTS"
+
+
+@pytest.mark.asyncio
+async def test_citizen_cannot_access_operator_verification_queue():
+    """Test that a valid logged-in citizen is strictly blocked from Operator endpoints (403 Forbidden)."""
+    unique_email = f"citizen_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as ac:
+        # 1. Signup citizen
+        signup_res = await ac.post(
+            "/api/v1/auth/signup",
+            json={
+                "email": unique_email,
+                "password": "CitizenSecret2026!",
+                "full_name": "Citizen User",
+            },
+        )
+        assert signup_res.status_code == 201
+        token = signup_res.json()["data"]["access_token"]
+
+        # 2. Try to access operator verification queue with citizen JWT -> 403 Forbidden
+        queue_res = await ac.get(
+            "/api/v1/verification/queue",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert queue_res.status_code == 403
+        assert queue_res.json()["error"]["code"] == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_citizen_location_persistence_and_profile():
+    """Test PUT /api/v1/citizen/me/location and GET /api/v1/citizen/me."""
+    unique_email = f"citizen_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as ac:
+        # 1. Signup citizen
+        signup_res = await ac.post(
+            "/api/v1/auth/signup",
+            json={
+                "email": unique_email,
+                "password": "CitizenSecret2026!",
+                "full_name": "Priya Patel",
+            },
+        )
+        assert signup_res.status_code == 201
+        token = signup_res.json()["data"]["access_token"]
+
+        # 2. Save location preferences
+        loc_res = await ac.put(
+            "/api/v1/citizen/me/location",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "latitude": 19.0760,
+                "longitude": 72.8777,
+                "location_name": "Mumbai South",
+                "alert_radius_km": 30.0,
+            },
+        )
+        assert loc_res.status_code == 200
+        loc_data = loc_res.json()
+        assert loc_data["home_location_name"] == "Mumbai South"
+        assert loc_data["home_location_lat"] == 19.0760
+        assert loc_data["alert_radius_km"] == 30.0
+
+        # 3. Retrieve /api/v1/citizen/me
+        me_res = await ac.get(
+            "/api/v1/citizen/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert me_res.status_code == 200
+        assert me_res.json()["home_location_name"] == "Mumbai South"

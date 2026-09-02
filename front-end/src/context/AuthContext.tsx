@@ -1,16 +1,22 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { authApi, OperatorProfile } from '@/services/authApi';
+import { authApi, UserProfile } from '@/services/authApi';
 
 const TOKEN_KEY = 'nwbda_auth_token';
-const OPERATOR_KEY = 'nwbda_operator_profile';
+const USER_KEY = 'nwbda_user_profile';
 
 interface AuthContextType {
   token: string | null;
-  operator: OperatorProfile | null;
+  user: UserProfile | null;
+  operator: UserProfile | null; // backward compatibility
   isAuthenticated: boolean;
+  isOperator: boolean;
+  isCitizen: boolean;
+  isAdmin: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<UserProfile>;
+  signup: (fullName: string, email: string, password: string) => Promise<UserProfile>;
   logout: () => void;
+  updateSavedLocation: (lat: number, lon: number, name?: string, radius?: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,9 +26,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(TOKEN_KEY) : null;
   });
 
-  const [operator, setOperator] = useState<OperatorProfile | null>(() => {
+  const [user, setUser] = useState<UserProfile | null>(() => {
     if (typeof sessionStorage !== 'undefined') {
-      const stored = sessionStorage.getItem(OPERATOR_KEY);
+      const stored = sessionStorage.getItem(USER_KEY);
       if (stored) {
         try {
           return JSON.parse(stored);
@@ -36,37 +42,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const role = (user?.role || '').toUpperCase();
+  const isOperator = role === 'OPERATOR' || role === 'ADMIN';
+  const isCitizen = role === 'CITIZEN';
+  const isAdmin = role === 'ADMIN';
+
+  const login = useCallback(async (username: string, password: string): Promise<UserProfile> => {
     setIsLoading(true);
     try {
       const res = await authApi.login(username, password);
       const data = res.data;
+      const profile = data.user || data.operator;
       setToken(data.access_token);
-      setOperator(data.operator);
+      setUser(profile);
 
       sessionStorage.setItem(TOKEN_KEY, data.access_token);
-      sessionStorage.setItem(OPERATOR_KEY, JSON.stringify(data.operator));
+      sessionStorage.setItem(USER_KEY, JSON.stringify(profile));
+      return profile;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const signup = useCallback(async (fullName: string, email: string, password: string): Promise<UserProfile> => {
+    setIsLoading(true);
+    try {
+      const res = await authApi.signup({ full_name: fullName, email, password });
+      const data = res.data;
+      const profile = data.user || data.operator;
+      setToken(data.access_token);
+      setUser(profile);
+
+      sessionStorage.setItem(TOKEN_KEY, data.access_token);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(profile));
+      return profile;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const updateSavedLocation = useCallback(async (lat: number, lon: number, name?: string, radius?: number) => {
+    if (!token) return;
+    try {
+      const updated = await authApi.updateLocation({
+        latitude: lat,
+        longitude: lon,
+        location_name: name,
+        alert_radius_km: radius,
+      });
+      setUser(updated);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(updated));
+    } catch {
+      // Non-blocking location sync
+    }
+  }, [token]);
+
   const logout = useCallback(() => {
     setToken(null);
-    setOperator(null);
+    setUser(null);
     sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(OPERATOR_KEY);
+    sessionStorage.removeItem(USER_KEY);
   }, []);
 
   return (
     <AuthContext.Provider
       value={{
         token,
-        operator,
+        user,
+        operator: user,
         isAuthenticated: Boolean(token),
+        isOperator,
+        isCitizen,
+        isAdmin,
         isLoading,
         login,
+        signup,
         logout,
+        updateSavedLocation,
       }}
     >
       {children}

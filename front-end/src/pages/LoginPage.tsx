@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ShieldCheck,
   CheckSquare,
   ArrowRight,
   ArrowLeft,
   Building2,
-  Radio,
   Lock,
   Mail,
   AlertCircle,
   Loader2,
   UserCheck,
   Key,
-  Compass,
-  FileText,
+  UserPlus,
 } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/context/AuthContext';
@@ -22,24 +20,34 @@ import { useAuth } from '@/context/AuthContext';
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading, isAuthenticated } = useAuth();
+  const { login, isLoading, isAuthenticated, isOperator } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'OPERATOR' | 'CITIZEN'>('OPERATOR');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin/queue';
+  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname;
 
   React.useEffect(() => {
     if (isAuthenticated) {
-      navigate(from, { replace: true });
+      if (from) {
+        navigate(from, { replace: true });
+      } else {
+        navigate(isOperator ? '/admin/queue' : '/citizen-dashboard', { replace: true });
+      }
     }
-  }, [isAuthenticated, navigate, from]);
+  }, [isAuthenticated, isOperator, navigate, from]);
 
-  const handleAutofill = () => {
+  const handleAutofillOperator = () => {
     setEmail('operator@weather-platform.gov.in');
     setPassword('EmergencyOps2026!');
+    setErrorMsg(null);
+  };
+
+  const handleAutofillAdmin = () => {
+    setEmail('admin@weather-platform.gov.in');
+    setPassword('EmergencyAdmin2026!');
     setErrorMsg(null);
   };
 
@@ -48,15 +56,22 @@ export const LoginPage: React.FC = () => {
     setErrorMsg(null);
 
     if (!email.trim() || !password) {
-      setErrorMsg('Please enter both operator email and password.');
+      setErrorMsg('Please enter both your email/username and password.');
       return;
     }
 
     try {
-      await login(email.trim(), password);
-      navigate(from, { replace: true });
+      const profile = await login(email.trim(), password);
+      const userRole = (profile.role || '').toUpperCase();
+      if (from) {
+        navigate(from, { replace: true });
+      } else if (userRole === 'OPERATOR' || userRole === 'ADMIN') {
+        navigate('/admin/queue', { replace: true });
+      } else {
+        navigate('/citizen-dashboard', { replace: true });
+      }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Invalid operator credentials. Access denied.');
+      setErrorMsg(err instanceof Error ? err.message : 'Invalid credentials. Access denied.');
     }
   };
 
@@ -70,7 +85,10 @@ export const LoginPage: React.FC = () => {
           <div className="flex rounded-2xl bg-slate-200/80 p-1.5 border border-slate-300/60 shadow-2xs">
             <button
               type="button"
-              onClick={() => setActiveTab('OPERATOR')}
+              onClick={() => {
+                setActiveTab('OPERATOR');
+                setErrorMsg(null);
+              }}
               className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'OPERATOR'
                   ? 'bg-white text-blue-900 shadow-sm border border-slate-200'
@@ -83,7 +101,10 @@ export const LoginPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setActiveTab('CITIZEN')}
+              onClick={() => {
+                setActiveTab('CITIZEN');
+                setErrorMsg(null);
+              }}
               className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'CITIZEN'
                   ? 'bg-white text-emerald-900 shadow-sm border border-slate-200'
@@ -91,7 +112,7 @@ export const LoginPage: React.FC = () => {
               }`}
             >
               <UserCheck className={`h-4 w-4 ${activeTab === 'CITIZEN' ? 'text-emerald-600' : 'text-slate-400'}`} />
-              <span>Public Citizen Access</span>
+              <span>Public Citizen Login</span>
             </button>
           </div>
 
@@ -109,105 +130,42 @@ export const LoginPage: React.FC = () => {
                       <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-full">
                         Admin / Operator Portal
                       </span>
-                      <span className="flex items-center space-x-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
-                        <Radio className="h-2.5 w-2.5 text-emerald-500 animate-pulse" aria-hidden="true" />
-                        <span>Control Room Live</span>
-                      </span>
                     </div>
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
                       Emergency Operations Login
                     </h1>
                     <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-                      DEOC / SDRF / NDRF Disaster Management Verification Queue
+                      National DEOC triage queues and disaster command center
                     </p>
                   </div>
                 </div>
 
-                {/* Error Banner */}
-                {errorMsg && (
-                  <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3.5 text-xs text-rose-800 flex items-start space-x-2.5">
-                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span className="font-semibold">{errorMsg}</span>
+                {/* Quick Autofill Buttons for Evaluators */}
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-900 flex items-center space-x-1.5">
+                      <Key className="h-3.5 w-3.5 text-blue-600" />
+                      <span>Evaluator Demo Accounts</span>
+                    </span>
                   </div>
-                )}
-
-                {/* Login Form */}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        Operator Email Address
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleAutofill}
-                        className="inline-flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                      >
-                        <Key className="h-3 w-3" />
-                        <span>1-Click Autofill Credentials</span>
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="operator@weather-platform.gov.in"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all font-medium"
-                      />
-                    </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAutofillOperator}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-[11px] font-bold text-white transition-colors cursor-pointer"
+                    >
+                      <CheckSquare className="h-3 w-3" />
+                      <span>Autofill DEOC Operator</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAutofillAdmin}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-[11px] font-bold text-white transition-colors cursor-pointer"
+                    >
+                      <CheckSquare className="h-3 w-3" />
+                      <span>Autofill Admin HQ</span>
+                    </button>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
-                      <input
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full flex items-center justify-center space-x-2 px-5 py-3.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Authenticating Operator JWT Session...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckSquare className="h-4 w-4" />
-                        <span>Authenticate & Access Control Room</span>
-                        <ArrowRight className="h-4 w-4" />
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {/* Protected Environment Note */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-slate-600 space-y-2">
-                  <div className="flex items-center space-x-2 text-slate-900 font-bold">
-                    <Building2 className="h-4 w-4 text-slate-600" aria-hidden="true" />
-                    <span>Protected Operator Environment</span>
-                  </div>
-                  <p className="leading-relaxed text-[11px] text-slate-500">
-                    Authorized operators can authenticate using default credentials (
-                    <strong className="font-mono text-slate-800">operator@weather-platform.gov.in</strong> /{' '}
-                    <strong className="font-mono text-slate-800">EmergencyOps2026!</strong>) to unlock report verification queues.
-                  </p>
                 </div>
               </>
             ) : (
@@ -220,64 +178,131 @@ export const LoginPage: React.FC = () => {
                   <div>
                     <div className="flex items-center space-x-2">
                       <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
-                        Public Citizen Access
+                        Citizen Portal
                       </span>
-                      <span className="text-[11px] font-medium text-slate-500">No Login Required</span>
                     </div>
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-                      Citizen Safety & Incident Portal
+                      Citizen Account Sign In
                     </h1>
                     <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-                      Hyper-local weather warnings, route blockage checks, and citizen reporting
+                      Access saved home location, proximity disaster alerts, and report history
                     </p>
                   </div>
                 </div>
-
-                {/* Quick Action Cards for Citizens */}
-                <div className="space-y-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/citizen-dashboard')}
-                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 hover:bg-emerald-50/40 transition-all text-left group cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                        <Compass className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-emerald-800">
-                          My Area Citizen Dashboard
-                        </h4>
-                        <p className="text-[11px] text-slate-500">
-                          View nearby verified weather hazards & evacuation shelters around your location
-                        </p>
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 shrink-0" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigate('/report')}
-                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/40 transition-all text-left group cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-blue-800">
-                          Report Severe Weather Event
-                        </h4>
-                        <p className="text-[11px] text-slate-500">
-                          Submit citizen eyewitness report with geotagged photo or video evidence
-                        </p>
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600 shrink-0" />
-                  </button>
-                </div>
               </>
+            )}
+
+            {/* Error Banner */}
+            {errorMsg && (
+              <div
+                role="alert"
+                className="flex items-start space-x-2.5 rounded-xl border border-red-200 bg-red-50/90 p-3.5 text-xs text-red-700 animate-in fade-in"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" aria-hidden="true" />
+                <span className="font-medium leading-relaxed">{errorMsg}</span>
+              </div>
+            )}
+
+            {/* Unified Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  {activeTab === 'OPERATOR' ? 'Operator Email / Username' : 'Citizen Email Address'}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="h-4 w-4" aria-hidden="true" />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={
+                      activeTab === 'OPERATOR'
+                        ? 'operator@weather-platform.gov.in'
+                        : 'citizen@example.com'
+                    }
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full flex items-center justify-center space-x-2 rounded-xl py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-sm transition-all focus:ring-2 focus:outline-none disabled:opacity-50 cursor-pointer ${
+                  activeTab === 'OPERATOR'
+                    ? 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500/30'
+                    : 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500/30'
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span>Authenticating...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {activeTab === 'OPERATOR' ? 'Sign In to Operations Command' : 'Sign In as Citizen'}
+                    </span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Citizen Signup Call-to-Action */}
+            {activeTab === 'CITIZEN' && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center space-x-1.5">
+                    <UserPlus className="h-4 w-4 text-emerald-600" />
+                    <span>New Citizen User?</span>
+                  </span>
+                  <Link
+                    to="/signup"
+                    className="font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
+                  >
+                    Create Free Account &rarr;
+                  </Link>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Register in seconds to receive automatic location-aware flood and storm alerts.
+                </p>
+              </div>
+            )}
+
+            {activeTab === 'OPERATOR' && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-slate-600 space-y-1.5">
+                <div className="flex items-center space-x-2 text-slate-900 font-bold">
+                  <Building2 className="h-4 w-4 text-slate-600" aria-hidden="true" />
+                  <span>Restricted Operator Access</span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-slate-500">
+                  Emergency operations accounts are strictly governed. Role-based session tokens are audited in accordance with disaster management protocol.
+                </p>
+              </div>
             )}
 
             {/* Back link */}
@@ -297,4 +322,3 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
-

@@ -1,25 +1,23 @@
-"""FastAPI Dependencies for Authentication & DB session injection."""
-
 import uuid
-from typing import Optional
+from typing import Callable, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, is_token_revoked
 from app.db.session import get_db
 from app.models.user import User
 
 security_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_current_operator(
+async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Validate JWT bearer token and retrieve authenticated operator User from DB."""
+    """Validate JWT bearer token and retrieve authenticated User from DB."""
     if not credentials or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -31,6 +29,16 @@ async def get_current_operator(
         )
 
     token = credentials.credentials
+    if is_token_revoked(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "REVOKED_TOKEN",
+                "message": "Token has been revoked. Please log in again.",
+            },
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = decode_access_token(token)
     except ValueError as err:
@@ -67,10 +75,48 @@ async def get_current_operator(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
-                "code": "OPERATOR_NOT_FOUND",
-                "message": "Operator account inactive or not found in database.",
+                "code": "USER_NOT_FOUND",
+                "message": "User account inactive or not found in database.",
             },
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Optional user dependency for public endpoints with personalized citizen tracking."""
+    if not credentials or not credentials.credentials:
+        return None
+    try:
+        return await get_current_user(credentials=credentials, db=db)
+    except HTTPException:
+        return None
+
+
+def require_role(*allowed_roles: str) -> Callable:
+    """Dependency factory restricting endpoint access to specific user roles."""
+    normalized_roles = {r.strip().upper() for r in allowed_roles}
+
+    async def role_checker(user: User = Depends(get_current_user)) -> User:
+        user_role = (user.role or "").strip().upper()
+        if user_role != "ADMIN" and user_role not in normalized_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "FORBIDDEN",
+                    "message": f"Access denied. Endpoint requires one of roles {list(normalized_roles)}, but current user has role '{user.role}'.",
+                },
+            )
+        return user
+
+    return role_checker
+
+
+# Preconfigured role dependencies
+get_current_operator = require_role("OPERATOR", "ADMIN")
+get_current_admin = require_role("ADMIN")
+get_current_citizen = require_role("CITIZEN", "ADMIN")

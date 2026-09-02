@@ -47,6 +47,12 @@ class WeatherReport(Base):
         ForeignKey("sources.id"),
         nullable=False,
     )
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     external_id: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,

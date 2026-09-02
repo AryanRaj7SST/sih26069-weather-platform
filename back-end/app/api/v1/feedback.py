@@ -1,14 +1,17 @@
 """Community Feedback Loop API Router."""
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from sqlalchemy import String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_optional_user
 from app.db.session import get_db
 from app.models.feedback import IncidentFeedback
 from app.models.report import WeatherReport
+from app.models.user import User
 from app.schemas.feedback import (
     FeedbackSummaryData,
     FeedbackVoteRequest,
@@ -31,6 +34,7 @@ async def submit_incident_feedback(
     id: str = Path(..., min_length=3, max_length=64, description="Incident UUID or Tracking ID"),
     payload: FeedbackVoteRequest = ...,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ) -> FeedbackVoteResponse:
     """Submit confirm or dispute vote for incident."""
     clean_id = id.strip()
@@ -63,27 +67,42 @@ async def submit_incident_feedback(
     client_ip = request.client.host if request.client else "127.0.0.1"
     user_agent = request.headers.get("user-agent", "")[:255]
 
-    # Check for existing vote by this client IP for this report
-    existing_stmt = (
-        select(IncidentFeedback)
-        .where(
-            IncidentFeedback.report_id == report.id,
-            IncidentFeedback.client_ip == client_ip,
+    # Check for existing vote by this user or client IP for this report
+    if current_user:
+        existing_stmt = (
+            select(IncidentFeedback)
+            .where(
+                IncidentFeedback.report_id == report.id,
+                (IncidentFeedback.user_id == current_user.id) | (IncidentFeedback.client_ip == client_ip),
+            )
+            .order_by(IncidentFeedback.created_at.desc())
+            .limit(1)
         )
-        .order_by(IncidentFeedback.created_at.desc())
-        .limit(1)
-    )
+    else:
+        existing_stmt = (
+            select(IncidentFeedback)
+            .where(
+                IncidentFeedback.report_id == report.id,
+                IncidentFeedback.client_ip == client_ip,
+            )
+            .order_by(IncidentFeedback.created_at.desc())
+            .limit(1)
+        )
+
     existing_res = await db.execute(existing_stmt)
     existing_vote = existing_res.scalars().first()
 
     if existing_vote:
         # Update existing vote if changed
         existing_vote.vote_type = vote_kind
+        if current_user:
+            existing_vote.user_id = current_user.id
         existing_vote.user_agent = user_agent
         existing_vote.created_at = datetime.now(timezone.utc)
     else:
         vote = IncidentFeedback(
             report_id=report.id,
+            user_id=current_user.id if current_user else None,
             vote_type=vote_kind,
             client_ip=client_ip,
             user_agent=user_agent,
@@ -133,6 +152,7 @@ async def get_incident_feedback_summary(
     request: Request,
     id: str = Path(..., min_length=3, max_length=64, description="Incident UUID or Tracking ID"),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ) -> FeedbackVoteResponse:
     """Get feedback summary counts for incident."""
     clean_id = id.strip()
@@ -156,16 +176,27 @@ async def get_incident_feedback_summary(
 
     client_ip = request.client.host if request.client else "127.0.0.1"
 
-    # Check if client has already voted
-    client_vote_stmt = (
-        select(IncidentFeedback)
-        .where(
-            IncidentFeedback.report_id == report.id,
-            IncidentFeedback.client_ip == client_ip,
+    # Check if user or client has already voted
+    if current_user:
+        client_vote_stmt = (
+            select(IncidentFeedback)
+            .where(
+                IncidentFeedback.report_id == report.id,
+                (IncidentFeedback.user_id == current_user.id) | (IncidentFeedback.client_ip == client_ip),
+            )
+            .order_by(IncidentFeedback.created_at.desc())
+            .limit(1)
         )
-        .order_by(IncidentFeedback.created_at.desc())
-        .limit(1)
-    )
+    else:
+        client_vote_stmt = (
+            select(IncidentFeedback)
+            .where(
+                IncidentFeedback.report_id == report.id,
+                IncidentFeedback.client_ip == client_ip,
+            )
+            .order_by(IncidentFeedback.created_at.desc())
+            .limit(1)
+        )
     client_vote_res = await db.execute(client_vote_stmt)
     client_vote = client_vote_res.scalars().first()
 
