@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import { Globe, Layers, RefreshCw } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
@@ -26,6 +26,7 @@ export const NationalMapPage: React.FC = () => {
   const [showEEZ, setShowEEZ] = useState(true);
   const [showIncidents, setShowIncidents] = useState(true);
   const [showForecasts, setShowForecasts] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   // 1. Fetch Nationwide Verified Incidents
   const { data: incidentsGeo, isLoading: isLoadingIncidents, refetch: refetchIncidents } = useQuery<GeoJSONFeatureCollection>({
@@ -76,7 +77,7 @@ export const NationalMapPage: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Unified operational view combining real-time verified incidents, IMD/NDMA cyclone track advisories, and India Exclusive Economic Zone boundaries.
+                  Unified operational view combining real-time verified incidents, IMD/NDMA cyclone track advisories, hazard density heatmaps, and India Exclusive Economic Zone boundaries.
                 </p>
               </div>
             </div>
@@ -107,7 +108,7 @@ export const NationalMapPage: React.FC = () => {
                   type="checkbox"
                   checked={showIncidents}
                   onChange={(e) => setShowIncidents(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
                 />
                 <span className="flex items-center space-x-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
@@ -121,11 +122,25 @@ export const NationalMapPage: React.FC = () => {
                   type="checkbox"
                   checked={showForecasts}
                   onChange={(e) => setShowForecasts(e.target.checked)}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
                 />
                 <span className="flex items-center space-x-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />
                   <span>IMD/NDMA Forecast Advisories ({forecastFeatures.length})</span>
+                </span>
+              </label>
+
+              {/* Toggle Hazard Heatmap */}
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showHeatmap}
+                  onChange={(e) => setShowHeatmap(e.target.checked)}
+                  className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 h-4 w-4 cursor-pointer"
+                />
+                <span className="flex items-center space-x-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse" />
+                  <span>Hazard Density Heatmap (B5)</span>
                 </span>
               </label>
 
@@ -135,7 +150,7 @@ export const NationalMapPage: React.FC = () => {
                   type="checkbox"
                   checked={showEEZ}
                   onChange={(e) => setShowEEZ(e.target.checked)}
-                  className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 h-4 w-4"
+                  className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 h-4 w-4 cursor-pointer"
                 />
                 <span className="flex items-center space-x-1">
                   <span className="h-2.5 w-2.5 rounded-full bg-cyan-500" />
@@ -200,6 +215,27 @@ export const NationalMapPage: React.FC = () => {
                   }}
                 />
               )}
+
+              {/* Hazard Density Heatmap Layer (B5) */}
+              {showHeatmap &&
+                incidentFeatures.map((feat) => {
+                  if (feat.geometry.type !== 'Point') return null;
+                  const coords = feat.geometry.coordinates as [number, number];
+                  const color = feat.properties.severity === 'SEVERE' ? '#ef4444' : feat.properties.severity === 'HIGH' ? '#f97316' : '#eab308';
+                  return (
+                    <Circle
+                      key={`heat-${feat.properties.id}`}
+                      center={[coords[1], coords[0]]}
+                      radius={45000} // 45km density radius
+                      pathOptions={{
+                        color,
+                        fillColor: color,
+                        fillOpacity: 0.35,
+                        weight: 1,
+                      }}
+                    />
+                  );
+                })}
 
               {/* Incident Markers */}
               {showIncidents &&
