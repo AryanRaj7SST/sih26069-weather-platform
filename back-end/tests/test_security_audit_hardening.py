@@ -89,3 +89,112 @@ def test_circuit_breaker_lifecycle():
     cb.record_success()
     assert cb.state == "CLOSED"
     assert cb.failure_count == 0
+
+
+def test_file_upload_magic_byte_verification_and_traversal():
+    """Verify file uploads check magic bytes and reject disguised script payloads."""
+    from app.services.storage import validate_file_magic_bytes
+
+    # Valid JPEG
+    valid_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 100
+    validate_file_magic_bytes(valid_jpeg, "image/jpeg")
+
+    # Valid PNG
+    valid_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    validate_file_magic_bytes(valid_png, "image/png")
+
+    # Disguised HTML in JPG (Stored XSS attempt)
+    disguised_html = b"<script>alert(1)</script>"
+    with pytest.raises(ValueError, match="disallowed executable or script"):
+        validate_file_magic_bytes(disguised_html, "image/jpeg")
+
+    # Disguised PHP script
+    disguised_php = b"<?php system($_GET['cmd']); ?>"
+    with pytest.raises(ValueError, match="disallowed executable or script"):
+        validate_file_magic_bytes(disguised_php, "image/png")
+
+    # Mismatched binary content
+    mismatched = b"NOT_A_REAL_IMAGE_BYTES" * 10
+    with pytest.raises(ValueError, match="File magic bytes do not match"):
+        validate_file_magic_bytes(mismatched, "image/jpeg")
+
+
+def test_sse_ticket_nonce_lifecycle_and_single_use():
+    """Verify SSE ticket nonces are single-use and automatically invalidated upon redemption."""
+    from app.core.security import create_sse_ticket, redeem_sse_ticket
+
+    ticket = create_sse_ticket(subject="operator_123", role="ADMIN")
+    assert len(ticket) >= 16
+
+    # 1. First redemption succeeds
+    redeemed = redeem_sse_ticket(ticket)
+    assert redeemed is not None
+    assert redeemed["subject"] == "operator_123"
+    assert redeemed["role"] == "ADMIN"
+
+    # 2. Second redemption fails (atomic single-use nonce)
+    second_attempt = redeem_sse_ticket(ticket)
+    assert second_attempt is None
+
+
+def test_token_revocation_blocklist():
+    """Verify explicit token revocation invalidates JWT authentication."""
+    from app.core.security import (
+        create_access_token,
+        decode_access_token,
+        is_token_revoked,
+        revoke_token,
+    )
+
+    token = create_access_token(subject="user_456", role="OPERATOR")
+    payload = decode_access_token(token)
+    assert payload["sub"] == "user_456"
+    assert is_token_revoked(token) is False
+
+    # Revoke token
+    revoke_token(token)
+    assert is_token_revoked(token) is True
+
+    # Subsequent decode raises ValueError
+    with pytest.raises(ValueError, match="revoked"):
+        decode_access_token(token)
+
+
+def test_sliding_window_rate_limiter():
+    """Verify rate limiter blocks excessive requests per client key."""
+    from app.core.rate_limiter import SlidingWindowRateLimiter
+
+    limiter = SlidingWindowRateLimiter(max_requests=3, window_seconds=1.0)
+    client_key = "test_ip_127_0_0_1"
+
+    assert limiter.is_allowed(client_key) is True
+    assert limiter.is_allowed(client_key) is True
+    assert limiter.is_allowed(client_key) is True
+
+    # 4th request within window is blocked
+    assert limiter.is_allowed(client_key) is False
+
+    # Reset allows access again
+    limiter.reset(client_key)
+    assert limiter.is_allowed(client_key) is True
+
+
+def test_gazetteer_regional_transliterations():
+    """Verify gazetteer resolves regional colloquial transliterations to standardized administrative centers."""
+    from app.intelligence.gazetteer import INDIAN_CITIES
+
+    assert "vizag" in INDIAN_CITIES
+    assert INDIAN_CITIES["vizag"]["city"] == "Visakhapatnam"
+
+    assert "trivandrum" in INDIAN_CITIES
+    assert INDIAN_CITIES["trivandrum"]["city"] == "Thiruvananthapuram"
+
+    assert "baroda" in INDIAN_CITIES
+    assert INDIAN_CITIES["baroda"]["city"] == "Vadodara"
+
+    assert "pondicherry" in INDIAN_CITIES
+    assert INDIAN_CITIES["pondicherry"]["city"] == "Puducherry"
+
+    assert "allahabad" in INDIAN_CITIES
+    assert INDIAN_CITIES["allahabad"]["city"] == "Prayagraj"
+
