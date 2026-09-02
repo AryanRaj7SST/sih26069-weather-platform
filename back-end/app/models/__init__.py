@@ -5,6 +5,7 @@ from app.models.category import EventCategory
 from app.models.corroboration import IncidentObservationCorroboration
 from app.models.duplicate import DuplicateCluster, DuplicateMember
 from app.models.evidence import EvidenceItem, IncidentEvidenceLink
+from app.models.forecast import ForecastAdvisory
 from app.models.ingestion import IngestionRun
 from app.models.media import ReportMedia
 from app.models.observation import WeatherObservation
@@ -21,6 +22,7 @@ __all__ = [
     "EventCategory",
     "WeatherReport",
     "WeatherReportArchive",
+    "ForecastAdvisory",
     "ReportMedia",
     "WeatherObservation",
     "EvidenceItem",

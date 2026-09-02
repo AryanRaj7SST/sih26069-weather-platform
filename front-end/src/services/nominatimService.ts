@@ -164,3 +164,5 @@ export async function searchCity(query: string): Promise<GeocodedLocation[]> {
     return [];
   }
 }
+
+export { searchCity as searchLocations };

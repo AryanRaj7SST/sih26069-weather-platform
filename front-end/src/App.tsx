@@ -10,6 +10,8 @@ import { CitizenReportPage } from '@/pages/CitizenReportPage';
 import { TrackReportPage } from '@/pages/TrackReportPage';
 import { IncidentListPage } from '@/pages/IncidentListPage';
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage';
+import { CitizenDashboardPage } from '@/pages/CitizenDashboardPage';
+import { NationalMapPage } from '@/pages/NationalMapPage';
 import { AdminVerificationQueuePage } from '@/pages/AdminVerificationQueuePage';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { LoginPage } from '@/pages/LoginPage';
@@ -37,6 +39,8 @@ export function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/citizen-dashboard" element={<CitizenDashboardPage />} />
+            <Route path="/national-map" element={<NationalMapPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/incidents" element={<IncidentListPage />} />
             <Route path="/incidents/:id" element={<IncidentDetailPage />} />

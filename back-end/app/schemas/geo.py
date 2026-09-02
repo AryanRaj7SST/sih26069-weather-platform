@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,10 +39,10 @@ class GeoJSONIncidentProperties(BaseModel):
 
 
 class GeoJSONIncidentFeature(BaseModel):
-    """GeoJSON Feature for Leaflet vector layer."""
+    """GeoJSON Feature for Leaflet vector layer (supports Point, LineString, Polygon, MultiPolygon)."""
 
     type: Literal["Feature"] = "Feature"
-    geometry: GeoJSONGeometryPoint
+    geometry: Union[GeoJSONGeometryPoint, Dict[str, Any]]
     properties: GeoJSONIncidentProperties
 
 
