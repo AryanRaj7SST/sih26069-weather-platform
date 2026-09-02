@@ -10,13 +10,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_access_token
 from app.main import app
 from app.models.category import EventCategory
 from app.models.report import WeatherReport
 from app.models.source import Source
-
-
-from app.core.security import create_access_token
 
 
 @pytest.fixture

@@ -63,13 +63,33 @@ async def submit_incident_feedback(
     client_ip = request.client.host if request.client else "127.0.0.1"
     user_agent = request.headers.get("user-agent", "")[:255]
 
-    vote = IncidentFeedback(
-        report_id=report.id,
-        vote_type=vote_kind,
-        client_ip=client_ip,
-        user_agent=user_agent,
+    # Check for existing vote by this client IP for this report
+    existing_stmt = (
+        select(IncidentFeedback)
+        .where(
+            IncidentFeedback.report_id == report.id,
+            IncidentFeedback.client_ip == client_ip,
+        )
+        .order_by(IncidentFeedback.created_at.desc())
+        .limit(1)
     )
-    db.add(vote)
+    existing_res = await db.execute(existing_stmt)
+    existing_vote = existing_res.scalars().first()
+
+    if existing_vote:
+        # Update existing vote if changed
+        existing_vote.vote_type = vote_kind
+        existing_vote.user_agent = user_agent
+        existing_vote.created_at = datetime.now(timezone.utc)
+    else:
+        vote = IncidentFeedback(
+            report_id=report.id,
+            vote_type=vote_kind,
+            client_ip=client_ip,
+            user_agent=user_agent,
+        )
+        db.add(vote)
+
     await db.commit()
 
     # Aggregate counts
@@ -107,9 +127,10 @@ async def submit_incident_feedback(
     response_model=FeedbackVoteResponse,
     status_code=status.HTTP_200_OK,
     summary="Get Community Feedback Summary",
-    description="Returns aggregate confirm/dispute vote counts for an incident.",
+    description="Returns aggregate confirm/dispute vote counts and client vote status for an incident.",
 )
 async def get_incident_feedback_summary(
+    request: Request,
     id: str = Path(..., min_length=3, max_length=64, description="Incident UUID or Tracking ID"),
     db: AsyncSession = Depends(get_db),
 ) -> FeedbackVoteResponse:
@@ -133,6 +154,21 @@ async def get_incident_feedback_summary(
             detail={"code": "RESOURCE_NOT_FOUND", "message": f"Incident not found: {clean_id}"},
         )
 
+    client_ip = request.client.host if request.client else "127.0.0.1"
+
+    # Check if client has already voted
+    client_vote_stmt = (
+        select(IncidentFeedback)
+        .where(
+            IncidentFeedback.report_id == report.id,
+            IncidentFeedback.client_ip == client_ip,
+        )
+        .order_by(IncidentFeedback.created_at.desc())
+        .limit(1)
+    )
+    client_vote_res = await db.execute(client_vote_stmt)
+    client_vote = client_vote_res.scalars().first()
+
     confirm_stmt = select(func.count(IncidentFeedback.id)).where(
         IncidentFeedback.report_id == report.id,
         IncidentFeedback.vote_type == "CONFIRM",
@@ -154,9 +190,9 @@ async def get_incident_feedback_summary(
             report_id=report.id,
             confirm_count=conf_cnt,
             dispute_count=disp_cnt,
-            user_voted=False,
-            voted_type="",
-            last_voted_at=datetime.now(timezone.utc),
+            user_voted=client_vote is not None,
+            voted_type=client_vote.vote_type if client_vote else "",
+            last_voted_at=client_vote.created_at if client_vote else datetime.now(timezone.utc),
         ),
         meta={"timestamp": datetime.now(timezone.utc).isoformat()},
     )

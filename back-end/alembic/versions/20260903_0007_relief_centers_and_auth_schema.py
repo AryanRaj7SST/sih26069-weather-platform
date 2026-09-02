@@ -7,12 +7,12 @@ Create Date: 2026-09-03 03:05:00.000000
 """
 
 import uuid
-from datetime import datetime, timezone
 
 import geoalchemy2
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 from app.core.security import get_password_hash
 
 # revision identifiers, used by Alembic.

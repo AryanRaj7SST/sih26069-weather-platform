@@ -4,6 +4,8 @@ import { useLocationScope } from '@/hooks/useLocationScope';
 import { searchLocations, GeocodedLocation } from '@/services/nominatimService';
 import { routeApi, RouteCheckResponseData } from '@/services/routeApi';
 
+import { INDIA_CENTROID } from '@/constants/geo';
+
 interface RouteBlockageCheckerProps {
   onRouteChecked: (data: RouteCheckResponseData | null) => void;
 }
@@ -55,8 +57,8 @@ export const RouteBlockageChecker: React.FC<RouteBlockageCheckerProps> = ({ onRo
       return;
     }
 
-    const origLat = currentLocation.lat || 12.9716;
-    const origLng = currentLocation.lon || 77.5946;
+    const origLat = currentLocation.lat || INDIA_CENTROID[0];
+    const origLng = currentLocation.lon || INDIA_CENTROID[1];
 
     setIsChecking(true);
     setErrorMsg(null);

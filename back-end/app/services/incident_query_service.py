@@ -13,7 +13,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from geoalchemy2 import Geography
-from geoalchemy2.functions import ST_AsGeoJSON, ST_DWithin, ST_Distance, ST_MakeEnvelope, ST_MakePoint, ST_SetSRID
+from geoalchemy2.functions import (
+    ST_AsGeoJSON,
+    ST_Distance,
+    ST_DWithin,
+    ST_MakeEnvelope,
+    ST_MakePoint,
+    ST_SetSRID,
+)
 from sqlalchemy import and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

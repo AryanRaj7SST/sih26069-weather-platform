@@ -170,7 +170,7 @@ class WeatherReport(Base):
 
         raw_text = expl.get("explanation")
         if raw_text and isinstance(raw_text, str):
-            lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
+            lines = [line_str.strip() for line_str in raw_text.split("\n") if line_str.strip()]
             if len(lines) > 1:
                 return lines[1]
             elif lines:

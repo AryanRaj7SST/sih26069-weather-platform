@@ -16,6 +16,7 @@ from app.schemas.relief_center import (
     ReliefCenterCreateRequest,
     ReliefCenterItem,
     ReliefCenterListResponse,
+    ReliefCenterUpdateRequest,
 )
 
 router = APIRouter()
@@ -126,6 +127,43 @@ async def create_relief_center(
         is_active=True,
     )
     db.add(center)
+    await db.commit()
+    await db.refresh(center)
+
+
+@router.patch(
+    "/{id}",
+    response_model=ReliefCenterItem,
+    status_code=status.HTTP_200_OK,
+    summary="Update Relief Center Occupancy & Status (Operator Only)",
+    description="Updates capacity, occupied count, or active status of a relief center.",
+)
+async def update_relief_center(
+    id: uuid.UUID,
+    payload: ReliefCenterUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_operator: User = Depends(get_current_operator),
+) -> ReliefCenterItem:
+    """Update relief center occupancy (requires operator JWT auth)."""
+    stmt = select(ReliefCenter).where(ReliefCenter.id == id)
+    res = await db.execute(stmt)
+    center = res.scalar_one_or_none()
+
+    if not center:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "RESOURCE_NOT_FOUND", "message": f"Relief center {id} not found"},
+        )
+
+    if payload.capacity is not None:
+        center.capacity = payload.capacity
+    if payload.occupied_count is not None:
+        center.occupied_count = payload.occupied_count
+    if payload.contact_phone is not None:
+        center.contact_phone = payload.contact_phone
+    if payload.is_active is not None:
+        center.is_active = payload.is_active
+
     await db.commit()
     await db.refresh(center)
 

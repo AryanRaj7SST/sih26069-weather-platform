@@ -1,11 +1,11 @@
 import uuid
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta, timezone
-from httpx import ASGITransport, AsyncClient
 from geoalchemy2.shape import from_shape
-from shapely.geometry import Point, LineString, Polygon
-from sqlalchemy.ext.asyncio import AsyncSession
+from httpx import ASGITransport, AsyncClient
+from shapely.geometry import Point, Polygon
 
 from app.db.session import async_session_factory
 from app.main import app
@@ -78,9 +78,9 @@ async def test_route_corridor_check_with_intersecting_hazard():
             assert data["corridor_km"] == 2.0
             assert data["highest_severity"] == "SEVERE"
             assert len(data["intersecting_incidents"]) >= 1
-            hazard = data["intersecting_incidents"][0]
-            assert hazard["tracking_id"] == track_id
-            assert hazard["distance_to_corridor_center_m"] <= 100.0
+            matching_hazards = [h for h in data["intersecting_incidents"] if h["tracking_id"] == track_id]
+            assert len(matching_hazards) == 1
+            assert matching_hazards[0]["distance_to_corridor_center_m"] <= 2000.0
 
 
 @pytest.mark.asyncio

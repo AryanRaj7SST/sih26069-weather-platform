@@ -1,12 +1,10 @@
 """Automated Unit & Integration Tests for Security Guard Hardening (SSRF, Parsing DoS, Circuit Breaker, Sanitization)."""
 
 import pytest
+
 from app.core.security_guard import (
-    APPROVED_INGESTION_DOMAINS,
     CircuitBreaker,
-    CircuitBreakerOpenError,
     SSRFValidationError,
-    get_circuit_breaker,
     sanitize_nlp_text,
     validate_external_url,
 )

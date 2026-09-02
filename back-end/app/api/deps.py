@@ -63,26 +63,12 @@ async def get_current_operator(
     res = await db.execute(stmt)
     user = res.scalar_one_or_none()
 
-    if not user and user_id == "operator@weather-platform.gov.in":
-        from app.core.security import get_password_hash
-
-        user = User(
-            email="operator@weather-platform.gov.in",
-            full_name="Emergency Operations Operator",
-            hashed_password=get_password_hash("EmergencyOps2026!"),
-            role="OPERATOR",
-            is_active=True,
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "code": "OPERATOR_NOT_FOUND",
-                "message": "Operator account inactive or not found.",
+                "message": "Operator account inactive or not found in database.",
             },
             headers={"WWW-Authenticate": "Bearer"},
         )

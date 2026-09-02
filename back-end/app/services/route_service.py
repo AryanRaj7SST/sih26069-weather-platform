@@ -1,16 +1,25 @@
 """Production service for path corridor hazard checks using PostGIS spatial geography buffering."""
 
+import json
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from geoalchemy2 import Geometry, Geography
-from geoalchemy2.functions import ST_AsGeoJSON, ST_Buffer, ST_Distance, ST_Intersects, ST_MakeLine, ST_MakePoint, ST_SetSRID
-from sqlalchemy import and_, cast, func, select
+import httpx
+from geoalchemy2 import Geography, Geometry
+from geoalchemy2.functions import (
+    ST_AsGeoJSON,
+    ST_Buffer,
+    ST_Distance,
+    ST_GeomFromGeoJSON,
+    ST_Intersects,
+    ST_MakeLine,
+    ST_MakePoint,
+    ST_SetSRID,
+)
+from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.category import EventCategory
 from app.models.report import WeatherReport
 from app.schemas.route import (
     IntersectingHazardDetail,
@@ -21,6 +30,24 @@ from app.schemas.route import (
 logger = logging.getLogger(__name__)
 
 
+async def fetch_osrm_road_geometry(
+    orig_lat: float, orig_lon: float, dest_lat: float, dest_lon: float
+) -> Optional[Dict[str, Any]]:
+    """Fetch real driving road geometry (LineString GeoJSON) from OSRM routing engine."""
+    osrm_url = f"https://router.project-osrm.org/route/v1/driving/{orig_lon},{orig_lat};{dest_lon},{dest_lat}?overview=full&geometries=geojson"
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(osrm_url)
+            if resp.status_code == 200:
+                data = resp.json()
+                routes = data.get("routes", [])
+                if routes and "geometry" in routes[0]:
+                    return routes[0]["geometry"]
+    except Exception as e:
+        logger.warning("OSRM routing service unavailable (%s). Falling back to great-circle corridor.", e)
+    return None
+
+
 class RouteCheckService:
     """Service providing spatial path blockage and hazard corridor checks."""
 
@@ -29,16 +56,29 @@ class RouteCheckService:
         session: AsyncSession,
         payload: RouteCheckRequest,
     ) -> RouteCheckResponseData:
-        """Perform PostGIS geography buffer intersection check between origin and destination."""
+        """Perform PostGIS geography buffer intersection check on real road geometry."""
         orig = payload.origin
         dest = payload.destination
         corridor_km = payload.corridor_km
         corridor_meters = corridor_km * 1000.0
 
-        # Construct 4326 PostGIS geometry line between origin and destination
         orig_point = ST_SetSRID(ST_MakePoint(orig.longitude, orig.latitude), 4326)
         dest_point = ST_SetSRID(ST_MakePoint(dest.longitude, dest.latitude), 4326)
-        path_line = ST_MakeLine(orig_point, dest_point)
+
+        # 1. Fetch real road driving LineString from OSRM
+        road_geom_dict = await fetch_osrm_road_geometry(
+            orig.latitude, orig.longitude, dest.latitude, dest.longitude
+        )
+
+        if road_geom_dict and road_geom_dict.get("type") == "LineString":
+            # Real road driving corridor
+            road_geojson_str = json.dumps(road_geom_dict)
+            path_line = ST_SetSRID(ST_GeomFromGeoJSON(road_geojson_str), 4326)
+            is_real_road = True
+        else:
+            # Fallback to direct geometric line
+            path_line = ST_MakeLine(orig_point, dest_point)
+            is_real_road = False
 
         # Buffer path line by corridor_meters using PostGIS geography conversion
         path_geography = cast(path_line, Geography)
@@ -107,8 +147,6 @@ class RouteCheckService:
         g_res = await session.execute(geojson_stmt)
         g_row = g_res.one()
 
-        import json
-
         line_dict = json.loads(g_row.line_geojson) if g_row.line_geojson else {}
         buffer_dict = json.loads(g_row.buffer_geojson) if g_row.buffer_geojson else {}
 
@@ -120,6 +158,7 @@ class RouteCheckService:
                     "geometry": line_dict,
                     "properties": {
                         "type": "PATH_LINE",
+                        "is_real_road": is_real_road,
                         "origin_name": orig.name or "Origin",
                         "destination_name": dest.name or "Destination",
                     },

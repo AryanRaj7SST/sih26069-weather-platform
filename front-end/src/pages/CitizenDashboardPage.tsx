@@ -14,6 +14,8 @@ import { routeApi, RouteCheckResponseData } from '@/services/routeApi';
 import { apiClient } from '@/services/client';
 import { GeoJSONFeatureCollection } from '@/types';
 
+import { useTranslation } from 'react-i18next';
+
 // Custom Leaflet relief center marker icon
 const reliefCenterIcon = L.divIcon({
   className: 'relief-center-marker',
@@ -56,14 +58,15 @@ const hazardMarkerIcon = (severity: string) => {
 };
 
 export const CitizenDashboardPage: React.FC = () => {
+  const { t } = useTranslation();
   const { currentLocation } = useLocationScope();
   const [showLocationGate, setShowLocationGate] = useState(currentLocation.name === 'All India');
   const [radiusKm, setRadiusKm] = useState(25.0);
   const [routeCheckResult, setRouteCheckResult] = useState<RouteCheckResponseData | null>(null);
   const [showReliefCenters, setShowReliefCenters] = useState(true);
 
-  const userLat = currentLocation.lat || 12.9716;
-  const userLng = currentLocation.lon || 77.5946;
+  const userLat = currentLocation.lat || 20.5937;
+  const userLng = currentLocation.lon || 78.9629;
 
   // Query nearby verified incidents
   const { data: nearbyGeo, isLoading, refetch } = useQuery<GeoJSONFeatureCollection>({
@@ -126,37 +129,42 @@ export const CitizenDashboardPage: React.FC = () => {
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 antialiased">
       <Navbar />
 
+      {/* Feature B3: Sleek Non-Intrusive Floating Proximity Alert Toast */}
+      {activeAlert && (
+        <aside
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-20 right-4 left-4 sm:left-auto sm:w-[480px] z-50 animate-in slide-in-from-top-3 fade-in duration-300 rounded-2xl border border-rose-500/40 bg-rose-600/95 backdrop-blur-md p-4 text-white shadow-2xl flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-white font-extrabold text-lg shrink-0">
+              ⚡
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="bg-white text-rose-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
+                  NEW REALTIME ALERT NEAR YOU
+                </span>
+                <span className="text-xs opacity-90">{activeAlert.timestamp}</span>
+              </div>
+              <h3 className="text-sm font-black mt-0.5">{activeAlert.title}</h3>
+              <p className="text-xs opacity-95">
+                Detected <strong>{activeAlert.distanceKm} km</strong> from your registered location. Exercise caution.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={dismissAlert}
+            className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors shrink-0 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </aside>
+      )}
+
       <main className="flex-1 py-6">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
-          {/* Feature B3: Real-time Proximity Alert Toast */}
-          {activeAlert && (
-            <div className="animate-bounce rounded-2xl border-2 border-rose-500 bg-rose-600 p-4 text-white shadow-xl flex items-center justify-between gap-4">
-              <div className="flex items-center space-x-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-white font-extrabold text-lg shrink-0">
-                  ⚡
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="bg-white text-rose-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
-                      NEW REALTIME ALERT NEAR YOU
-                    </span>
-                    <span className="text-xs opacity-90">{activeAlert.timestamp}</span>
-                  </div>
-                  <h3 className="text-sm font-black mt-0.5">{activeAlert.title}</h3>
-                  <p className="text-xs opacity-95">
-                    Detected <strong>{activeAlert.distanceKm} km</strong> from your registered location. Exercise caution.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={dismissAlert}
-                className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors shrink-0"
-              >
-                Dismiss Alert
-              </button>
-            </div>
-          )}
           {/* Header Banner */}
           <div className="flex items-center justify-between gap-4 flex-wrap rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xs">
             <div className="flex items-center space-x-3">
@@ -166,7 +174,7 @@ export const CitizenDashboardPage: React.FC = () => {
               <div>
                 <div className="flex items-center space-x-2">
                   <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                    My Area Citizen Dashboard
+                    {t('citizen.title', 'My Area Citizen Dashboard')}
                   </h1>
                   <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider">
                     Verified Public Feed
@@ -181,7 +189,7 @@ export const CitizenDashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setShowReliefCenters(!showReliefCenters)}
@@ -220,7 +228,7 @@ export const CitizenDashboardPage: React.FC = () => {
             {/* Active Hazards in Radius */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
               <div className="flex items-center justify-between text-slate-500">
-                <span className="text-xs font-bold uppercase tracking-wider">Active Hazards Nearby</span>
+                <span className="text-xs font-bold uppercase tracking-wider">{t('citizen.activeHazards', 'Active Hazards Nearby')}</span>
                 <Radio className="h-4 w-4 text-blue-600" />
               </div>
               <div className="mt-2 flex items-baseline space-x-2">
@@ -237,7 +245,7 @@ export const CitizenDashboardPage: React.FC = () => {
             {/* Nearest Hazard Distance */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
               <div className="flex items-center justify-between text-slate-500">
-                <span className="text-xs font-bold uppercase tracking-wider">Nearest Incident</span>
+                <span className="text-xs font-bold uppercase tracking-wider">{t('citizen.nearestHazard', 'Nearest Incident')}</span>
                 <MapPin className="h-4 w-4 text-amber-600" />
               </div>
               <div className="mt-2 flex items-baseline space-x-2">
@@ -322,7 +330,7 @@ export const CitizenDashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="relative h-[480px] w-full rounded-xl overflow-hidden border border-slate-200">
+              <div className="relative h-[340px] sm:h-[400px] lg:h-[480px] w-full rounded-xl overflow-hidden border border-slate-200">
                 <MapContainer
                   center={[userLat, userLng]}
                   zoom={11}

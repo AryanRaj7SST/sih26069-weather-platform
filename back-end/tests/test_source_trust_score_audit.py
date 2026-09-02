@@ -15,8 +15,8 @@ consistent across all 9 registered ingestion sources and services:
 """
 
 from typing import Dict
+
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion import adapter_registry
@@ -28,11 +28,9 @@ from app.ingestion.imd_adapter import IMDNowcastAdapter
 from app.ingestion.mastodon_adapter import MastodonSocialAdapter
 from app.ingestion.ndma_adapter import NDMASachetAdapter
 from app.ingestion.open_meteo_adapter import OpenMeteoAdapter
-from app.models.source import Source
 from app.services.evidence_service import evidence_service
 from app.services.observation_service import observation_service
 from app.services.report_service import report_service
-
 
 # Authoritative expected base trust score catalog
 EXPECTED_TRUST_SCORES: Dict[str, float] = {

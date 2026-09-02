@@ -2,6 +2,8 @@ import math
 import re
 from typing import Dict, List, Optional, Set, Tuple
 
+from app.core.security_guard import sanitize_nlp_text
+
 # Domain synonym maps to normalize terminology
 SYNONYM_MAP: Dict[str, str] = {
     "subway": "underpass",
@@ -78,9 +80,6 @@ STOP_WORDS: Set[str] = {
     "inside",
     "around",
 }
-
-
-from app.core.security_guard import sanitize_nlp_text
 
 
 class SemanticVectorizer:

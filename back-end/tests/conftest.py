@@ -2,11 +2,13 @@
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import pool
+from sqlalchemy import pool, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.core.security import create_access_token, get_password_hash
 from app.main import app
+from app.models.user import User
 
 
 @pytest_asyncio.fixture
@@ -25,11 +27,6 @@ async def db_session():
         yield session
 
     await test_engine.dispose()
-
-
-from app.core.security import create_access_token, get_password_hash
-from app.models.user import User
-from sqlalchemy import select
 
 
 @pytest_asyncio.fixture(autouse=True)

@@ -1,5 +1,7 @@
 """Security, password hashing, and JWT token management utilities."""
 
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -11,6 +13,10 @@ from app.core.config import settings
 # JWT configuration
 ALGORITHM = "HS256"
 DEFAULT_EXPIRE_MINUTES = 60 * 24  # 24 hours
+
+# In-memory revocation blocklist and single-use SSE ticket nonce cache
+REVOKED_TOKENS: set[str] = set()
+SSE_TICKETS: dict[str, dict[str, Any]] = {}
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -52,14 +58,6 @@ def create_access_token(
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-
-
-import time
-import uuid
-
-# In-memory revocation blocklist and single-use SSE ticket nonce cache
-REVOKED_TOKENS: set[str] = set()
-SSE_TICKETS: dict[str, dict[str, Any]] = {}
 
 
 def revoke_token(token: str) -> None:

@@ -1,13 +1,13 @@
 """Unit tests for Security Auth, Relief Center Locator, and Community Feedback API endpoints."""
 
 import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.main import app
-from app.models.user import User
 
 
 @pytest.mark.asyncio

@@ -18,11 +18,11 @@ No authentication required for the public feed.
 Rate limiting: Honour GDACS_MIN_REQUEST_INTERVAL_SECONDS (default 5.0s).
 """
 
+import asyncio
 import hashlib
 import logging
 import time
-import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx

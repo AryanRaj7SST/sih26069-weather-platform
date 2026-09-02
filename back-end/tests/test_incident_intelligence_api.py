@@ -9,6 +9,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_access_token
 from app.main import app
 from app.models.corroboration import IncidentObservationCorroboration
 from app.models.duplicate import DuplicateCluster, DuplicateMember
@@ -16,9 +17,6 @@ from app.models.evidence import EvidenceItem, IncidentEvidenceLink
 from app.models.observation import WeatherObservation
 from app.models.report import WeatherReport
 from app.models.source import Source
-
-
-from app.core.security import create_access_token
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 import hashlib
-import re
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Tuple
@@ -19,9 +19,6 @@ ALLOWED_MIME_TYPES = {
 }
 
 MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024  # 15 MB
-
-
-import os
 
 MAGIC_SIGNATURES = {
     "image/jpeg": [b"\xff\xd8\xff"],

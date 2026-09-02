@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
 from app.core.redis import AsyncRedisClient
+from app.core.security import redeem_sse_ticket
 from app.schemas.realtime import (
     RealtimeEvent,
     RealtimeEventType,
@@ -254,9 +255,6 @@ async def realtime_event_generator(
 def get_redis_client() -> AsyncRedisClient:
     """Dependency provider returning an AsyncRedisClient instance."""
     return AsyncRedisClient()
-
-
-from app.core.security import redeem_sse_ticket
 
 
 @router.get(

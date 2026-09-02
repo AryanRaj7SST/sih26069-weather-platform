@@ -16,8 +16,9 @@ export function useProximityAlerts(radiusKm: number = 25.0) {
   const [activeAlert, setActiveAlert] = useState<ProximityAlert | null>(null);
 
   useEffect(() => {
-    const userLat = currentLocation.lat || 12.9716;
-    const userLng = currentLocation.lon || 77.5946;
+    const userLat = currentLocation.lat || 20.5937;
+    const userLng = currentLocation.lon || 78.9629;
+    const alertedIncidentIds = new Set<string>();
 
     const unsubscribe = realtimeService.subscribe((event) => {
       if (
@@ -26,6 +27,13 @@ export function useProximityAlerts(radiusKm: number = 25.0) {
         event.event_type === 'report.intelligence_ready'
       ) {
         const payload = event.payload as Record<string, unknown>;
+        const reportId = String(payload?.id || payload?.report_id || payload?.tracking_id || '');
+
+        if (reportId && alertedIncidentIds.has(reportId)) {
+          // Already alerted for this incident lifecycle
+          return;
+        }
+
         const lat = (payload?.latitude as number) || (payload?.lat as number);
         const lng = (payload?.longitude as number) || (payload?.lng as number);
 
@@ -35,8 +43,9 @@ export function useProximityAlerts(radiusKm: number = 25.0) {
           const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
           if (dist <= radiusKm) {
+            if (reportId) alertedIncidentIds.add(reportId);
             setActiveAlert({
-              id: (payload?.id as string) || (payload?.report_id as string) || String(Date.now()),
+              id: reportId || String(Date.now()),
               title: (payload?.title as string) || (payload?.category_code as string) || 'Nearby Weather Emergency',
               category: (payload?.category_code as string) || 'WEATHER_ALERT',
               severity: (payload?.severity as string) || 'HIGH',

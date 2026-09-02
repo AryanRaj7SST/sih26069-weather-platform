@@ -11,7 +11,6 @@ Tests cover:
 - Registry registration
 """
 
-import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,7 +21,6 @@ import pytest
 from app.ingestion.gdacs_adapter import GDACSAlertAdapter
 from app.ingestion.open_meteo_adapter import DEFAULT_INDIAN_CITIES, OpenMeteoAdapter
 from app.ingestion.schemas import NormalizedIngestionEvent, NormalizedObservationEvent
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Open-Meteo Adapter Tests
@@ -148,7 +146,7 @@ class TestOpenMeteoAdapter:
                 return None  # simulate failure
             return NormalizedObservationEvent(
                 source_code="OPEN_METEO",
-                external_id=f"OPEN_METEO-OM-DEL-20260903T0700Z",
+                external_id="OPEN_METEO-OM-DEL-20260903T0700Z",
                 station_code="OM-DEL",
                 station_name="Open-Meteo Virtual Station — Delhi",
                 latitude=28.614,

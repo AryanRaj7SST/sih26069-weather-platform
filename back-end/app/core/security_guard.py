@@ -9,7 +9,6 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 import ipaddress
 import logging
 import re
@@ -248,31 +247,48 @@ async def safe_fetch_external_payload(
             f"External source '{source_code}' circuit breaker is OPEN. Calls temporarily blocked."
         )
 
-    # 3. Execute request with strict timeout and streaming size limit
+    # 3. Execute request with strict timeout, redirect re-validation, and size limit
     try:
-        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
-            if method.upper() == "POST":
-                response = await client.post(validated_url, json=json_body, headers=headers)
-            else:
-                response = await client.get(validated_url, headers=headers)
+        current_url = validated_url
+        max_redirects = 5
 
-            response.raise_for_status()
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client:
+            for _ in range(max_redirects):
+                if method.upper() == "POST":
+                    response = await client.post(current_url, json=json_body, headers=headers)
+                else:
+                    response = await client.get(current_url, headers=headers)
 
-            # Check content length header if present
-            content_length = response.headers.get("content-length")
-            if content_length and int(content_length) > max_bytes:
-                raise ValueError(
-                    f"Payload size {content_length} bytes exceeds maximum allowed limit of {max_bytes} bytes."
-                )
+                # Check for 3xx redirects
+                if response.is_redirect:
+                    location = response.headers.get("location")
+                    if not location:
+                        break
+                    # Resolve relative redirect URLs against current URL
+                    resolved_redirect = str(response.url.join(location))
+                    # Re-validate redirect target against SSRF whitelist
+                    current_url = validate_external_url(resolved_redirect)
+                    continue
 
-            body_bytes = response.content
-            if len(body_bytes) > max_bytes:
-                raise ValueError(
-                    f"Downloaded payload size {len(body_bytes)} bytes exceeds limit of {max_bytes} bytes."
-                )
+                response.raise_for_status()
 
-            breaker.record_success()
-            return body_bytes
+                # Check content length header if present
+                content_length = response.headers.get("content-length")
+                if content_length and int(content_length) > max_bytes:
+                    raise ValueError(
+                        f"Payload size {content_length} bytes exceeds maximum allowed limit of {max_bytes} bytes."
+                    )
+
+                body_bytes = response.content
+                if len(body_bytes) > max_bytes:
+                    raise ValueError(
+                        f"Downloaded payload size {len(body_bytes)} bytes exceeds limit of {max_bytes} bytes."
+                    )
+
+                breaker.record_success()
+                return body_bytes
+
+            raise ValueError("Too many redirects encountered while fetching external payload.")
 
     except (httpx.HTTPError, ValueError, Exception) as err:
         breaker.record_failure()

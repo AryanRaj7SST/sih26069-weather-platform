@@ -61,11 +61,7 @@ export function App() {
               />
               <Route
                 path="/verification"
-                element={
-                  <ProtectedRoute>
-                    <AdminVerificationQueuePage />
-                  </ProtectedRoute>
-                }
+                element={<Navigate to="/admin/queue" replace />}
               />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/login" element={<LoginPage />} />

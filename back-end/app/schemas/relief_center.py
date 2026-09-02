@@ -22,6 +22,15 @@ class ReliefCenterCreateRequest(BaseModel):
     longitude: float = Field(..., ge=-180.0, le=180.0)
 
 
+class ReliefCenterUpdateRequest(BaseModel):
+    """Payload for updating an emergency relief center's occupancy or status."""
+
+    capacity: Optional[int] = Field(default=None, ge=1)
+    occupied_count: Optional[int] = Field(default=None, ge=0)
+    contact_phone: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class ReliefCenterItem(BaseModel):
     """Relief Center detail response model."""
 

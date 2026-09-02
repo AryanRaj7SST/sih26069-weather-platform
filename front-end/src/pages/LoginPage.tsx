@@ -25,8 +25,8 @@ export const LoginPage: React.FC = () => {
   const { login, isLoading, isAuthenticated } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'OPERATOR' | 'CITIZEN'>('OPERATOR');
-  const [email, setEmail] = useState('operator@weather-platform.gov.in');
-  const [password, setPassword] = useState('EmergencyOps2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin/queue';

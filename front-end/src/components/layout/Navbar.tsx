@@ -118,7 +118,7 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Center: Desktop Navigation Links + Tools Dropdown */}
-        <nav className="hidden xl:flex xl:h-full xl:items-center xl:space-x-1">
+        <nav className="hidden lg:flex lg:h-full lg:items-center lg:space-x-0.5 xl:space-x-1">
           {primaryLinks.map((link) => {
             const isActive = location.pathname === link.path;
             return (
