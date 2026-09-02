@@ -16,11 +16,19 @@ from app.models.report import WeatherReport
 from app.models.source import Source
 
 
+from app.core.security import create_access_token
+
+
 @pytest.fixture
 async def api_client():
-    """Async HTTP test client bound to FastAPI application."""
+    """Async HTTP test client bound to FastAPI application with operator authorization."""
+    token = create_access_token(subject="operator@weather-platform.gov.in", role="OPERATOR")
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
         yield client
 
 

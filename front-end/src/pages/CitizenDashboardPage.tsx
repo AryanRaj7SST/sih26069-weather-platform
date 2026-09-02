@@ -2,14 +2,27 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
-import { ShieldCheck, AlertTriangle, MapPin, Radio, Compass, Navigation, RefreshCw } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, MapPin, Radio, Compass, Navigation, RefreshCw, Layers } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { useLocationScope } from '@/hooks/useLocationScope';
 import { LocationGateModal } from '@/components/location/LocationGateModal';
+import { useProximityAlerts } from '@/hooks/useProximityAlerts';
 import { RouteBlockageChecker } from '@/components/route/RouteBlockageChecker';
+import { EmergencyContactsCard } from '@/components/common/EmergencyContactsCard';
 import { routeApi, RouteCheckResponseData } from '@/services/routeApi';
+import { apiClient } from '@/services/client';
 import { GeoJSONFeatureCollection } from '@/types';
+
+// Custom Leaflet relief center marker icon
+const reliefCenterIcon = L.divIcon({
+  className: 'relief-center-marker',
+  html: `<div class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white font-bold text-xs shadow-lg border-2 border-white">
+          🏕️
+        </div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+});
 
 // Custom Leaflet marker icons
 const userLocationIcon = L.divIcon({
@@ -47,6 +60,7 @@ export const CitizenDashboardPage: React.FC = () => {
   const [showLocationGate, setShowLocationGate] = useState(currentLocation.name === 'All India');
   const [radiusKm, setRadiusKm] = useState(25.0);
   const [routeCheckResult, setRouteCheckResult] = useState<RouteCheckResponseData | null>(null);
+  const [showReliefCenters, setShowReliefCenters] = useState(true);
 
   const userLat = currentLocation.lat || 12.9716;
   const userLng = currentLocation.lon || 77.5946;
@@ -57,6 +71,27 @@ export const CitizenDashboardPage: React.FC = () => {
     queryFn: () => routeApi.getNearbyIncidents(userLat, userLng, radiusKm, 'VERIFIED'),
     staleTime: 1000 * 60, // 1 min
   });
+
+  // Query nearby relief centers & shelters
+  const { data: reliefCentersRes } = useQuery<{
+    data: Array<{
+      id: string;
+      name: string;
+      center_type: string;
+      capacity: number;
+      available_capacity: number;
+      contact_phone: string;
+      latitude: number;
+      longitude: number;
+      distance_km: number;
+    }>;
+  }>({
+    queryKey: ['nearbyReliefCenters', userLat, userLng, radiusKm],
+    queryFn: () => apiClient(`/geo/relief-centers?lat=${userLat}&lng=${userLng}&radius_km=${radiusKm}`),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const reliefCenters = reliefCentersRes?.data || [];
 
   const features = nearbyGeo?.features || [];
   const totalNearby = features.length;
@@ -85,12 +120,43 @@ export const CitizenDashboardPage: React.FC = () => {
     }
   });
 
+  const { activeAlert, dismissAlert } = useProximityAlerts(radiusKm);
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 antialiased">
       <Navbar />
 
       <main className="flex-1 py-6">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+          {/* Feature B3: Real-time Proximity Alert Toast */}
+          {activeAlert && (
+            <div className="animate-bounce rounded-2xl border-2 border-rose-500 bg-rose-600 p-4 text-white shadow-xl flex items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-white font-extrabold text-lg shrink-0">
+                  ⚡
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-white text-rose-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
+                      NEW REALTIME ALERT NEAR YOU
+                    </span>
+                    <span className="text-xs opacity-90">{activeAlert.timestamp}</span>
+                  </div>
+                  <h3 className="text-sm font-black mt-0.5">{activeAlert.title}</h3>
+                  <p className="text-xs opacity-95">
+                    Detected <strong>{activeAlert.distanceKm} km</strong> from your registered location. Exercise caution.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissAlert}
+                className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors shrink-0"
+              >
+                Dismiss Alert
+              </button>
+            </div>
+          )}
           {/* Header Banner */}
           <div className="flex items-center justify-between gap-4 flex-wrap rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xs">
             <div className="flex items-center space-x-3">
@@ -116,6 +182,19 @@ export const CitizenDashboardPage: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowReliefCenters(!showReliefCenters)}
+                className={`flex items-center space-x-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${
+                  showReliefCenters
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Shelters ({reliefCenters.length})</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowLocationGate(true)}
@@ -204,10 +283,13 @@ export const CitizenDashboardPage: React.FC = () => {
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-500 line-clamp-1">
-                {totalNearby > 0 ? 'Stay alert for local hazards' : 'No active alerts in immediate radius'}
+                Filtered strictly to verified reports
               </p>
             </div>
           </div>
+
+          {/* Feature B7: Emergency Helplines Quick-Dial Directory */}
+          <EmergencyContactsCard />
 
           {/* Route Blockage Checker Component */}
           <RouteBlockageChecker onRouteChecked={(data) => setRouteCheckResult(data)} />
@@ -296,6 +378,33 @@ export const CitizenDashboardPage: React.FC = () => {
                       </Marker>
                     );
                   })}
+
+                  {/* Feature B1: Relief center & evacuation shelter markers */}
+                  {showReliefCenters &&
+                    reliefCenters.map((rc) => (
+                      <Marker
+                        key={rc.id}
+                        position={[rc.latitude, rc.longitude]}
+                        icon={reliefCenterIcon}
+                      >
+                        <Popup>
+                          <div className="p-1 space-y-1 text-xs">
+                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-800 uppercase">
+                              {rc.center_type}
+                            </span>
+                            <h4 className="font-bold text-slate-900">{rc.name}</h4>
+                            <p className="text-slate-500 text-[11px]">
+                              Capacity: <strong>{rc.available_capacity}</strong> available / {rc.capacity} total
+                            </p>
+                            {rc.contact_phone && (
+                              <p className="font-mono text-blue-700 font-bold text-[11px]">
+                                📞 {rc.contact_phone}
+                              </p>
+                            )}
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
 
                   {/* Route corridor GeoJSON overlay */}
                   {routeCheckResult && routeCheckResult.path_geojson && (

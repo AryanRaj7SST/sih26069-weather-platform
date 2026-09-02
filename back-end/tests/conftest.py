@@ -27,9 +27,37 @@ async def db_session():
     await test_engine.dispose()
 
 
+from app.core.security import create_access_token, get_password_hash
+from app.models.user import User
+from sqlalchemy import select
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def seed_test_operator(db_session: AsyncSession):
+    """Ensure the default operator user exists in DB for test cases."""
+    stmt = select(User).where(User.email == "operator@weather-platform.gov.in")
+    res = await db_session.execute(stmt)
+    user = res.scalar_one_or_none()
+    if not user:
+        user = User(
+            email="operator@weather-platform.gov.in",
+            full_name="Default Test Operator",
+            hashed_password=get_password_hash("EmergencyOps2026!"),
+            role="OPERATOR",
+            is_active=True,
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+
 @pytest_asyncio.fixture
 async def api_client():
-    """Async HTTP test client bound to FastAPI application."""
+    """Async HTTP test client bound to FastAPI application with default operator authorization."""
+    token = create_access_token(subject="operator@weather-platform.gov.in", role="OPERATOR")
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
         yield client

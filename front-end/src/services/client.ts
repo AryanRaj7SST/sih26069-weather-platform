@@ -30,6 +30,12 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     headers.set('Content-Type', 'application/json');
   }
 
+  // Automatically attach Bearer token if present in sessionStorage
+  const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('nwbda_auth_token') : null;
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   // Same-origin session cookies / bearer support
   const finalOptions: RequestInit = {
     ...options,
