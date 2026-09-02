@@ -1,4 +1,5 @@
 from app.db.base import Base
+from app.models.archive import WeatherReportArchive
 from app.models.audit import AuditLog
 from app.models.category import EventCategory
 from app.models.corroboration import IncidentObservationCorroboration
@@ -19,6 +20,7 @@ __all__ = [
     "Source",
     "EventCategory",
     "WeatherReport",
+    "WeatherReportArchive",
     "ReportMedia",
     "WeatherObservation",
     "EvidenceItem",

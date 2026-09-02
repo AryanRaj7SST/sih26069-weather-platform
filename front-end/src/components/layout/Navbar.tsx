@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Cloud, Bell, Menu, X, User } from 'lucide-react';
+import { CitySearchBar } from '@/components/common/CitySearchBar';
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
@@ -18,9 +19,9 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 gap-3">
         {/* Left: Mobile Hamburger & Brand Logo */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 shrink-0">
           <button
             type="button"
             className="rounded-md p-1.5 text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 md:hidden"
@@ -36,10 +37,10 @@ export const Navbar: React.FC = () => {
               <Cloud className="h-5 w-5" />
             </div>
             <div className="flex flex-col">
-              <span className="hidden font-bold tracking-tight text-blue-900 md:inline-block text-lg">
+              <span className="hidden font-bold tracking-tight text-blue-900 lg:inline-block text-base xl:text-lg">
                 National Weather Big Data Analytics Platform
               </span>
-              <span className="font-bold tracking-tight text-blue-900 md:hidden text-lg">
+              <span className="font-bold tracking-tight text-blue-900 lg:hidden text-base">
                 NWBDA
               </span>
             </div>
@@ -47,14 +48,14 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Center: Desktop Navigation Links */}
-        <nav className="hidden md:flex md:h-full md:items-center md:space-x-1 lg:space-x-6">
+        <nav className="hidden md:flex md:h-full md:items-center md:space-x-1 lg:space-x-3">
           {navLinks.map((link) => {
             const isActive = location.pathname === link.path;
             return (
               <Link
                 key={link.path}
                 to={link.path}
-                className={`relative flex h-full items-center px-3 text-sm font-medium transition-colors ${
+                className={`relative flex h-full items-center px-2.5 text-xs lg:text-sm font-medium transition-colors ${
                   isActive
                     ? 'text-blue-600 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-blue-600'
                     : 'text-slate-600 hover:text-slate-900'
@@ -66,11 +67,16 @@ export const Navbar: React.FC = () => {
           })}
         </nav>
 
-        {/* Right: Auth, Notifications & Profile */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        {/* Right: City Search Bar & Auth / Profile */}
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          {/* Desktop City Search Bar */}
+          <div className="hidden sm:block w-48 md:w-56 lg:w-64">
+            <CitySearchBar isCompact />
+          </div>
+
           <Link
             to="/login"
-            className="hidden text-sm font-medium text-slate-700 hover:text-blue-600 md:block"
+            className="hidden text-xs lg:text-sm font-medium text-slate-700 hover:text-blue-600 md:block"
           >
             Login
           </Link>
@@ -80,19 +86,24 @@ export const Navbar: React.FC = () => {
             className="rounded-full p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             aria-label="View notifications"
           >
-            <Bell className="h-5 w-5" />
+            <Bell className="h-4 w-4" />
           </button>
 
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-600 shadow-sm overflow-hidden">
-            <User className="h-5 w-5 text-slate-500" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-600 shadow-sm overflow-hidden">
+            <User className="h-4 w-4 text-slate-500" />
           </div>
         </div>
       </div>
 
-      {/* Mobile Drawer Menu */}
+      {/* Mobile Drawer Menu & Search */}
       {mobileMenuOpen && (
-        <div className="border-b border-slate-200 bg-white px-4 py-3 md:hidden">
-          <nav className="flex flex-col space-y-2">
+        <div className="border-b border-slate-200 bg-white px-4 py-3 md:hidden space-y-3">
+          {/* Mobile City Search Bar */}
+          <div className="w-full">
+            <CitySearchBar placeholder="Search Indian city or district..." />
+          </div>
+
+          <nav className="flex flex-col space-y-1">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.path;
               return (
