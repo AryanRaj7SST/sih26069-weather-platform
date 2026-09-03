@@ -210,6 +210,17 @@ class ReportService:
             await self.realtime_svc.publish_staged_outbox(outbox_row)
             await self.realtime_svc.publish_staged_outbox(orch_outbox_row)
 
+            # Fast-path immediate intelligence pipeline execution (location, duplicate, evidence, observation, credibility)
+            try:
+                from app.orchestration.incident_pipeline import IncidentPipeline
+                pipeline = IncidentPipeline()
+                await pipeline.execute_pipeline(db=session, incident_id=report.id, commit=True)
+                await session.refresh(report)
+            except Exception as pipe_err:
+                logger.warning(
+                    "Inline intelligence pipeline execution deferred to worker: %s", pipe_err
+                )
+
             return report, len(media_records)
 
         except Exception:
