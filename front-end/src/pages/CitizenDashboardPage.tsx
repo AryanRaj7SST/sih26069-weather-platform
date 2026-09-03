@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { ShieldCheck, AlertTriangle, MapPin, Radio, Compass, Navigation, RefreshCw, Layers } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
@@ -15,6 +15,30 @@ import { apiClient } from '@/services/client';
 import { GeoJSONFeatureCollection } from '@/types';
 
 import { useTranslation } from 'react-i18next';
+
+// Dynamic Leaflet Map Center & Zoom Controller
+const ProximityMapController: React.FC<{
+  center: [number, number];
+  radiusKm: number;
+  selectedCoords: [number, number] | null;
+}> = ({ center, radiusKm, selectedCoords }) => {
+  const map = useMap();
+
+  React.useEffect(() => {
+    map.invalidateSize();
+  }, [map]);
+
+  React.useEffect(() => {
+    if (selectedCoords) {
+      map.flyTo(selectedCoords, 14, { duration: 0.8 });
+    } else {
+      const zoom = radiusKm <= 10 ? 13 : radiusKm <= 25 ? 11 : radiusKm <= 50 ? 10 : 8;
+      map.flyTo(center, zoom, { duration: 0.8 });
+    }
+  }, [center, radiusKm, selectedCoords, map]);
+
+  return null;
+};
 
 // Custom Leaflet relief center marker icon
 const reliefCenterIcon = L.divIcon({
@@ -59,14 +83,18 @@ const hazardMarkerIcon = (severity: string) => {
 
 export const CitizenDashboardPage: React.FC = () => {
   const { t } = useTranslation();
-  const { currentLocation } = useLocationScope();
-  const [showLocationGate, setShowLocationGate] = useState(currentLocation.name === 'All India');
+  const { currentLocation, setCoords, detectLocation, isDetecting } = useLocationScope();
+  const [showLocationGate, setShowLocationGate] = useState(false);
   const [radiusKm, setRadiusKm] = useState(25.0);
   const [routeCheckResult, setRouteCheckResult] = useState<RouteCheckResponseData | null>(null);
   const [showReliefCenters, setShowReliefCenters] = useState(true);
+  const [selectedIncidentCoords, setSelectedIncidentCoords] = useState<[number, number] | null>(null);
 
-  const userLat = currentLocation.lat || 20.5937;
-  const userLng = currentLocation.lon || 78.9629;
+  // If location is national default (All India), default initial view to Bengaluru where active demo records exist
+  const isAllIndia = !currentLocation.lat || currentLocation.name === 'All India';
+  const userLat = isAllIndia ? 12.9716 : currentLocation.lat;
+  const userLng = isAllIndia ? 77.5946 : currentLocation.lon;
+  const locationLabel = isAllIndia ? 'Bengaluru (Demo Active)' : currentLocation.name;
 
   // Query nearby verified incidents
   const { data: nearbyGeo, isLoading, refetch } = useQuery<GeoJSONFeatureCollection>({
@@ -306,6 +334,60 @@ export const CitizenDashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Main Interactive Proximity Map */}
             <div className="lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3">
+              {/* Quick Location Scope Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-2.5 border border-slate-200 text-xs">
+                <div className="flex items-center space-x-2 text-slate-700">
+                  <MapPin className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span>Area: <strong className="text-slate-900">{locationLabel}</strong></span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => detectLocation()}
+                    disabled={isDetecting}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Navigation className={`h-3 w-3 ${isDetecting ? 'animate-spin' : ''}`} />
+                    <span>{isDetecting ? 'Detecting...' : 'Detect GPS'}</span>
+                  </button>
+
+                  <div className="flex items-center space-x-1 bg-white p-0.5 rounded-lg border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-400 px-1.5">Preset:</span>
+                    {[
+                      { name: 'Bengaluru', lat: 12.9716, lon: 77.5946 },
+                      { name: 'Mumbai', lat: 19.0760, lon: 72.8777 },
+                      { name: 'Delhi', lat: 28.6139, lon: 77.2090 },
+                      { name: 'Chennai', lat: 13.0827, lon: 80.2707 },
+                    ].map((city) => (
+                      <button
+                        key={city.name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedIncidentCoords(null);
+                          setCoords(city.lat, city.lon, city.name);
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                          locationLabel.toLowerCase().includes(city.name.toLowerCase())
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {city.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationGate(true)}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[11px] transition-colors cursor-pointer"
+                  >
+                    Search City
+                  </button>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center space-x-1.5">
                   <MapPin className="h-4 w-4 text-blue-600" />
@@ -319,8 +401,11 @@ export const CitizenDashboardPage: React.FC = () => {
                     <button
                       key={r}
                       type="button"
-                      onClick={() => setRadiusKm(r)}
-                      className={`rounded-lg px-2.5 py-1 transition-colors ${
+                      onClick={() => {
+                        setSelectedIncidentCoords(null);
+                        setRadiusKm(r);
+                      }}
+                      className={`rounded-lg px-2.5 py-1 transition-colors cursor-pointer ${
                         radiusKm === r ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
@@ -337,6 +422,12 @@ export const CitizenDashboardPage: React.FC = () => {
                   scrollWheelZoom={true}
                   className="h-full w-full"
                 >
+                  <ProximityMapController
+                    center={[userLat, userLng]}
+                    radiusKm={radiusKm}
+                    selectedCoords={selectedIncidentCoords}
+                  />
+
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -347,7 +438,7 @@ export const CitizenDashboardPage: React.FC = () => {
                     <Popup>
                       <div className="p-1 text-xs">
                         <strong className="font-bold text-blue-900">Your Location</strong>
-                        <p className="text-slate-600 mt-0.5">{currentLocation.name}</p>
+                        <p className="text-slate-600 mt-0.5">{locationLabel}</p>
                       </div>
                     </Popup>
                   </Marker>
@@ -456,38 +547,43 @@ export const CitizenDashboardPage: React.FC = () => {
                 <div className="py-12 text-center text-slate-400 space-y-2">
                   <ShieldCheck className="h-8 w-8 text-emerald-500 mx-auto" />
                   <p className="text-xs font-semibold text-slate-700">No verified hazards in this radius.</p>
-                  <p className="text-[11px] text-slate-400">Try expanding the radius to 50 km or 100 km.</p>
+                  <p className="text-[11px] text-slate-400">Try expanding the radius to 50 km or 100 km, or select another city above.</p>
                 </div>
               ) : (
                 <div className="space-y-3 max-h-[440px] overflow-y-auto pr-1">
-                  {features.map((feat) => (
-                    <div
-                      key={feat.properties.id}
-                      className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-2xs hover:border-slate-300 transition-all space-y-1.5"
-                    >
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="font-extrabold text-blue-700 uppercase tracking-wider">
-                          {feat.properties.category_code}
-                        </span>
-                        <span className="rounded bg-rose-100 px-1.5 py-0.2 font-extrabold text-rose-800">
-                          {feat.properties.severity}
-                        </span>
-                      </div>
+                  {features.map((feat) => {
+                    const geom = feat.geometry as { type: string; coordinates?: [number, number] };
+                    const coords = geom.coordinates;
+                    return (
+                      <div
+                        key={feat.properties.id}
+                        onClick={() => {
+                          if (coords && coords.length >= 2) {
+                            setSelectedIncidentCoords([coords[1], coords[0]]);
+                          }
+                        }}
+                        className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all space-y-1.5 cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-extrabold text-blue-700 uppercase tracking-wider">
+                            {feat.properties.category_code}
+                          </span>
+                          <span className="rounded bg-rose-100 px-1.5 py-0.2 font-extrabold text-rose-800">
+                            {feat.properties.severity}
+                          </span>
+                        </div>
 
-                      <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{feat.properties.title}</h4>
+                        <h4 className="text-xs font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                          {feat.properties.title}
+                        </h4>
 
-                      <p className="text-[11px] text-slate-500 flex items-center space-x-1">
-                        <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{feat.properties.location_name || 'Reported Area'}</span>
-                      </p>
-
-                      {feat.properties.credibility_reason && (
-                        <p className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 italic line-clamp-2">
-                          {feat.properties.credibility_reason}
+                        <p className="text-[11px] text-slate-500 flex items-center space-x-1">
+                          <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                          <span className="line-clamp-1">{feat.properties.location_name || 'Nearby Area'}</span>
                         </p>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
