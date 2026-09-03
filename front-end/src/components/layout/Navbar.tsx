@@ -249,8 +249,20 @@ export const Navbar: React.FC = () => {
 
           {isAuthenticated ? (
             <div className="flex items-center space-x-1.5 shrink-0">
-              <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
-                {user?.role || 'User'}
+              <span
+                className={`hidden md:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                  user?.role === 'ADMIN'
+                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                    : user?.role === 'OPERATOR'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+              >
+                {user?.role === 'ADMIN'
+                  ? '🛡️ ADMIN'
+                  : user?.role === 'OPERATOR'
+                  ? '🛡️ OPERATOR'
+                  : '👤 CITIZEN'}
               </span>
               <button
                 type="button"
