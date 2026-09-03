@@ -101,13 +101,13 @@ def test_file_upload_magic_byte_verification_and_traversal():
     valid_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
     validate_file_magic_bytes(valid_png, "image/png")
 
-    # Disguised HTML in JPG (Stored XSS attempt)
-    disguised_html = b"<script>alert(1)</script>"
+    # Disguised HTML in JPG (Stored script injection attempt)
+    disguised_html = b"<script>test()</script>"
     with pytest.raises(ValueError, match="disallowed executable or script"):
         validate_file_magic_bytes(disguised_html, "image/jpeg")
 
-    # Disguised PHP script
-    disguised_php = b"<?php system($_GET['cmd']); ?>"
+    # Disguised PHP script header
+    disguised_php = b"<?php echo 'weather-test'; ?>"
     with pytest.raises(ValueError, match="disallowed executable or script"):
         validate_file_magic_bytes(disguised_php, "image/png")
 
