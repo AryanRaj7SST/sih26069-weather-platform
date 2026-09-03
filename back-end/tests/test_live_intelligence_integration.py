@@ -93,14 +93,16 @@ async def test_e2e_real_pipeline_full_execution(db_session: AsyncSession) -> Non
 
     assert report is not None
     assert report.id is not None
-    assert report.processing_status == "QUEUED"
+    # Inline intelligence pipeline now runs on creation; status may be COMPLETED already
+    assert report.processing_status in ("QUEUED", "COMPLETED")
     report_id = report.id
 
-    # Verify 2 Outbox rows staged in PostgreSQL
+    # Verify Outbox rows staged in PostgreSQL (at least 2: report.created + orchestration.incident_ingested)
+    # The inline pipeline may also add a 3rd intelligence_ready row if it completes synchronously
     outbox_stmt = select(RealtimeOutbox).where(RealtimeOutbox.entity_id == str(report_id))
     outbox_res = await db_session.execute(outbox_stmt)
     outbox_rows = outbox_res.scalars().all()
-    assert len(outbox_rows) == 2
+    assert len(outbox_rows) >= 2
 
     event_types = {r.event_type for r in outbox_rows}
     assert "report.created" in event_types

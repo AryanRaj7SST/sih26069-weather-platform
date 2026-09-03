@@ -949,7 +949,7 @@ class IncidentQueryService:
                 WeatherReport.occurred_at >= func.now() - func.make_interval(0, 0, 0, 0, hours_ago)
             )
 
-        stmt = stmt.limit(500)
+        stmt = stmt.order_by(WeatherReport.occurred_at.desc().nullslast(), WeatherReport.created_at.desc()).limit(500)
         res = await session.execute(stmt)
         reports = res.scalars().all()
 
