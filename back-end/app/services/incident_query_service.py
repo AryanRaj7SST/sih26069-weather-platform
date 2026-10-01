@@ -1448,7 +1448,7 @@ class IncidentQueryService:
         else:
             # Daily UTC calendar buckets
             day_expr = func.date_trunc("day", func.timezone("UTC", WeatherReport.occurred_at))
-            stmt = select(
+            daily_stmt = select(
                 day_expr.label("day_bucket"),
                 func.count(WeatherReport.id).label("total_count"),
                 func.count(case((WeatherReport.verification_status == "VERIFIED", 1))).label(
@@ -1456,11 +1456,11 @@ class IncidentQueryService:
                 ),
             )
             if where_filters:
-                stmt = stmt.where(and_(*where_filters))
+                daily_stmt = daily_stmt.where(and_(*where_filters))
 
-            stmt = stmt.group_by(day_expr).order_by(day_expr.asc())
+            daily_stmt = daily_stmt.group_by(day_expr).order_by(day_expr.asc())
 
-            res = await session.execute(stmt)
+            res = await session.execute(daily_stmt)
             rows = res.all()
 
             db_buckets: Dict[str, Tuple[int, int]] = {}

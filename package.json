@@ -12,6 +12,7 @@
     "lint": "npm --prefix front-end run lint",
     "typecheck": "npm --prefix front-end run typecheck",
     "test": "npm --prefix front-end test",
-    "preview": "npm --prefix front-end run preview"
+    "preview": "npm --prefix front-end run preview",
+    "orchestrate": "python scripts/dev_orchestrator.py"
   }
 }

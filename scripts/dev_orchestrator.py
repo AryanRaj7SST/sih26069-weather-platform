@@ -52,50 +52,81 @@ def spawn_process(name: str, cmd: list[str], cwd: Path):
     return proc
 
 
+import argparse
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="SIH26069 Developer Stack Orchestrator")
+    parser.add_argument("--skip-migrate", action="store_true", help="Skip running database migrations")
+    parser.add_argument("--no-workers", action="store_true", help="Do not spawn background workers")
+    parser.add_argument("--no-frontend", action="store_true", help="Do not start Vite frontend server")
+    parser.add_argument("--no-api", action="store_true", help="Do not start FastAPI backend server")
+    parser.add_argument(
+        "--core-workers-only",
+        action="store_true",
+        help="Only run outbox and dispatcher workers, skipping external ingestion/observation/evidence/scheduler",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
     print("=" * 70)
     print(" National Weather Big Data Analytics Platform (SIH26069)")
     print(" Developer Stack Orchestrator")
     print("=" * 70)
 
-    # 1. Run Alembic Database Migrations
-    print("\n[1/5] Running Alembic Database Migrations...")
     venv_bin = "Scripts" if os.name == "nt" else "bin"
     executable_suffix = ".exe" if os.name == "nt" else ""
     venv_python = BACKEND_DIR / ".venv" / venv_bin / f"python{executable_suffix}"
     venv_alembic = BACKEND_DIR / ".venv" / venv_bin / f"alembic{executable_suffix}"
+    venv_uvicorn = BACKEND_DIR / ".venv" / venv_bin / f"uvicorn{executable_suffix}"
 
     if not venv_python.exists():
         print(f"[ERROR] Virtual environment not found at {venv_python}")
         print("Please initialize Python virtualenv in back-end/.venv first.")
         sys.exit(1)
 
-    run_command([str(venv_alembic), "upgrade", "head"], cwd=BACKEND_DIR)
+    # 1. Run Alembic Database Migrations
+    if not args.skip_migrate:
+        print("\n[1/4] Running Alembic Database Migrations...")
+        try:
+            run_command([str(venv_alembic), "upgrade", "head"], cwd=BACKEND_DIR)
+        except Exception as e:
+            print(f"[WARNING] Migration failed (ensure Postgres is running): {e}")
 
     # 2. Start Uvicorn Backend Dev Server
-    print("\n[2/5] Starting FastAPI Backend Dev Server (Port 8000)...")
-    venv_uvicorn = BACKEND_DIR / ".venv" / venv_bin / f"uvicorn{executable_suffix}"
-    spawn_process("Backend API", [str(venv_uvicorn), "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"], cwd=BACKEND_DIR)
+    if not args.no_api:
+        print("\n[2/4] Starting FastAPI Backend Dev Server (Port 8000)...")
+        spawn_process(
+            "Backend API",
+            [str(venv_uvicorn), "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
+            cwd=BACKEND_DIR,
+        )
 
-    # 3. Start Outbox & Scheduler Background Workers
-    print("\n[3/5] Starting Transactional Outbox Worker...")
-    spawn_process("Outbox Worker", [str(venv_python), "-m", "app.workers.run_outbox_worker"], cwd=BACKEND_DIR)
+    # 3. Start Background Workers
+    if not args.no_workers:
+        print("\n[3/4] Starting Background Workers...")
+        # Core workers
+        spawn_process("Outbox Worker", [str(venv_python), "-m", "app.workers.run_outbox_worker"], cwd=BACKEND_DIR)
+        spawn_process("Orchestration Dispatcher", [str(venv_python), "-m", "app.workers.run_dispatcher"], cwd=BACKEND_DIR)
 
-    # 4. Start orchestration dispatcher
-    print("\n[4/5] Starting Orchestration Dispatcher...")
-    spawn_process(
-        "Orchestration Dispatcher",
-        [str(venv_python), "-m", "app.workers.run_dispatcher"],
-        cwd=BACKEND_DIR,
-    )
+        if not args.core_workers_only:
+            # Full ingestion, observation, evidence & scheduler workers
+            spawn_process("Ingestion Worker", [str(venv_python), "-m", "app.workers.run_ingestion_worker"], cwd=BACKEND_DIR)
+            spawn_process("Observation Worker", [str(venv_python), "-m", "app.workers.run_observation_worker"], cwd=BACKEND_DIR)
+            spawn_process("Evidence Worker", [str(venv_python), "-m", "app.workers.run_evidence_worker"], cwd=BACKEND_DIR)
+            spawn_process("Scheduler Worker", [str(venv_python), "-m", "app.workers.run_scheduler"], cwd=BACKEND_DIR)
 
-    # 5. Start React Vite Frontend Dev Server
-    print("\n[5/5] Starting Frontend Vite Dev Server (Port 5173)...")
-    npm_command = "npm.cmd" if os.name == "nt" else "npm"
-    spawn_process("Frontend Vite", [npm_command, "run", "dev"], cwd=FRONTEND_DIR)
+    # 4. Start React Vite Frontend Dev Server
+    if not args.no_frontend:
+        print("\n[4/4] Starting Frontend Vite Dev Server (Port 5173)...")
+        npm_command = "npm.cmd" if os.name == "nt" else "npm"
+        spawn_process("Frontend Vite", [npm_command, "run", "dev"], cwd=FRONTEND_DIR)
 
     print("\n" + "=" * 70)
-    print(" All platform services launched successfully!")
+    print(" All selected platform services launched successfully!")
     print(" - Web Portal:     http://localhost:5173")
     print(" - Backend API:    http://localhost:8000/docs")
     print(" - Realtime SSE:   http://localhost:8000/api/v1/events/stream")

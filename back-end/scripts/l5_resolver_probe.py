@@ -9,12 +9,13 @@ Tests:
 Reports gaps and what is/isn't supported.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from app.intelligence.gazetteer import FOREIGN_LOCATIONS
 from app.intelligence.resolver import LocationResolver
-from app.intelligence.gazetteer import FOREIGN_LOCATIONS, INDIAN_CITIES, INDIAN_STATES
 
 resolver = LocationResolver()
 

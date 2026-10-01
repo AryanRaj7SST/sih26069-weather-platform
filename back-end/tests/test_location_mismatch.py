@@ -26,7 +26,6 @@ from app.intelligence.location_mismatch import (
     evaluate_location_mismatch,
 )
 
-
 # ─── P1: Both sides must be known ─────────────────────────────────────────────
 
 class TestP1BothSidesKnown:

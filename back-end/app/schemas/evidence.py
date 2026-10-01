@@ -25,7 +25,9 @@ class IncidentEvidenceItemData(BaseModel):
     )
     title: str = Field(..., description="Headline or post title.")
     text_snippet: str = Field(..., description="Concise text snippet.")
-    published_at: datetime = Field(..., description="Publication timestamp.")
+    published_at: Optional[datetime] = Field(
+        default=None, description="Publication timestamp."
+    )
     relationship: EvidenceRelationship = Field(
         ...,
         description="Canonical link role (e.g. SUPPORTING, RELATED, CONTRADICTORY).",

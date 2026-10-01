@@ -8,11 +8,13 @@ SYNTHETIC DATA: All posts are agent-authored for evaluation only.
 NOT REAL INCIDENTS. No real-world misinformation claims are made.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import uuid
+
 from app.intelligence.credibility_scorer import CredibilityScorer
 from app.intelligence.schemas import IncidentCredibilityInputs, SourceFamily
 
@@ -244,7 +246,7 @@ def main():
     print("="*70)
     print(f"  HOAX    mean={sum(h_scores)/len(h_scores):.4f}  min={min(h_scores):.4f}  max={max(h_scores):.4f}")
     print(f"  GENUINE mean={sum(g_scores)/len(g_scores):.4f}  min={min(g_scores):.4f}  max={max(g_scores):.4f}")
-    print(f"\n  Review line = 0.45")
+    print("\n  Review line = 0.45")
     print(f"  HOAX above 0.45: {sum(1 for s in h_scores if s > 0.45)}/{len(h_scores)}")
     print(f"  GENUINE above 0.45: {sum(1 for s in g_scores if s > 0.45)}/{len(g_scores)}")
 
@@ -253,15 +255,15 @@ def main():
     print("COMPONENT TRACE: H1 (the canonical foreign-location hoax)")
     print("="*70)
     bd = scorer.score_incident(HOAX_POSTS[0]["inputs"])
-    print(f"  source_base_trust=0.60, all metadata=True, cluster=1, no evidence, no obs")
-    print(f"  quality = 0.30*1+0.25*1+0.20*1+0.15*1+0.10*1 = 1.00")
+    print("  source_base_trust=0.60, all metadata=True, cluster=1, no evidence, no obs")
+    print("  quality = 0.30*1+0.25*1+0.20*1+0.15*1+0.10*1 = 1.00")
     print(f"  b_incident = 0.60 * (0.70 + 0.30*1.00) = 0.60 * 1.00 = {0.60*1.00:.4f}")
-    print(f"  s_crowd=0, s_evidence=0, s_obs=0 -> s_support=0, delta_support=0")
+    print("  s_crowd=0, s_evidence=0, s_obs=0 -> s_support=0, delta_support=0")
     print(f"  c_positive = b_incident = {bd.incident_baseline:.4f}")
-    print(f"  p_negative = 0 (no contradictions)")
-    print(f"  applicable_cap = cap_citizen = 0.65 (no corroboration)")
+    print("  p_negative = 0 (no contradictions)")
+    print("  applicable_cap = cap_citizen = 0.65 (no corroboration)")
     print(f"  final = min(c_positive={bd.positive_score:.4f}, cap=0.65) = {bd.final_credibility_score:.4f}")
-    print(f"\n  RESULT: Signal is absent because no component penalizes location mismatch.")
+    print("\n  RESULT: Signal is absent because no component penalizes location mismatch.")
     print(f"  The score {bd.final_credibility_score:.4f} is purely from source_prior × quality_score × base_factor.")
 
     print("\n" + "="*70)

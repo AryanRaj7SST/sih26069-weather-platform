@@ -24,7 +24,6 @@ from typing import List, Optional, Set
 
 from app.intelligence.extractor import EntityExtractor, entity_extractor
 from app.intelligence.gazetteer import (
-    AMBIGUOUS_PLACES,
     FOREIGN_LOCATIONS,
     INDIAN_CITIES,
     INDIAN_LOCALITIES,
