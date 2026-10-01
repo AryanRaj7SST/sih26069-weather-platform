@@ -1,0 +1,17 @@
+{
+  "name": "sih26069-weather-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "National Weather Big Data Analytics Platform (SIH26069)",
+  "workspaces": [
+    "front-end"
+  ],
+  "scripts": {
+    "dev": "npm --prefix front-end run dev",
+    "build": "npm --prefix front-end run build",
+    "lint": "npm --prefix front-end run lint",
+    "typecheck": "npm --prefix front-end run typecheck",
+    "test": "npm --prefix front-end test",
+    "preview": "npm --prefix front-end run preview"
+  }
+}

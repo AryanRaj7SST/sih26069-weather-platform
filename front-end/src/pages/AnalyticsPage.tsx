@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
-import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import {
   AnalyticsFilters,
   AnalyticsFilterState,
@@ -229,11 +226,8 @@ export const AnalyticsPage: React.FC = () => {
   const activeError = summaryError || trendError || regionalError || recentError;
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <Navbar />
-
-      <main className="flex-1 pb-16 pt-6">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="py-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
           {/* Header Banner */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -357,10 +351,6 @@ export const AnalyticsPage: React.FC = () => {
             isLoading={isSummaryLoading}
           />
         </div>
-      </main>
-
-      <Footer />
-      <MobileBottomNav />
     </div>
   );
 };

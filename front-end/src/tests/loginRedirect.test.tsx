@@ -12,14 +12,11 @@ import {
 } from "react-router-dom";
 import type { UserProfile } from "@/services/authApi";
 import { LoginPage } from "@/pages/LoginPage";
+import { GuestOnlyRoute } from "@/components/auth/GuestOnlyRoute";
 import { useAuth } from "@/context/AuthContext";
 
 vi.mock("@/context/AuthContext", () => ({
   useAuth: vi.fn(),
-}));
-
-vi.mock("@/components/layout/Navbar", () => ({
-  Navbar: () => <div data-testid="navbar" />,
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
@@ -56,8 +53,20 @@ function renderLogin(
 
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <LoginPage />
-      <LocationProbe />
+      <Routes>
+        <Route element={<GuestOnlyRoute />}>
+          <Route
+            path="/login"
+            element={
+              <>
+                <LoginPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Route>
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -112,15 +121,17 @@ describe("LoginPage authenticated redirects", () => {
               />
             }
           />
-          <Route
-            path="/login"
-            element={
-              <>
-                <LoginPage />
-                <LocationProbe />
-              </>
-            }
-          />
+          <Route element={<GuestOnlyRoute />}>
+            <Route
+              path="/login"
+              element={
+                <>
+                  <LoginPage />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Route>
           <Route path="*" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,

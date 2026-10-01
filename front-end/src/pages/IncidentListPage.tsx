@@ -1,10 +1,6 @@
-// Public Operational Incident Intelligence Feed & Search Directory
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Layers, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
 import { IncidentCard } from '@/features/incidents/IncidentCard';
 import { IncidentFilters, IncidentFilterState } from '@/features/incidents/IncidentFilters';
 import { LoadingSkeleton } from '@/components/common/LoadingSkeleton';
@@ -80,11 +76,8 @@ export const IncidentListPage: React.FC = () => {
   }, [response?.data, filters.searchQuery]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50/50 text-slate-900">
-      <Navbar />
-
-      <main className="flex-1 py-8 sm:py-10">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="py-8 sm:py-10">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
           {/* Header Banner */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -206,9 +199,6 @@ export const IncidentListPage: React.FC = () => {
             </div>
           )}
         </div>
-      </main>
-
-      <Footer />
     </div>
   );
 };

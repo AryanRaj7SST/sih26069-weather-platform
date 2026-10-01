@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
-import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { QueueKpiCards } from '@/features/admin/QueueKpiCards';
 import { QueueFilters, QueueFilterState } from '@/features/admin/QueueFilters';
 import { QueueTable } from '@/features/admin/QueueTable';
@@ -221,11 +218,8 @@ export const AdminVerificationQueuePage: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <Navbar />
-
-      <main className="flex-1 pb-16 pt-6">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div className="py-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Header Banner */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -445,7 +439,6 @@ export const AdminVerificationQueuePage: React.FC = () => {
             )}
           </div>
         </div>
-      </main>
 
       {/* Mobile Bottom Sheet / Modal Review Panel */}
       {selectedReport && (
@@ -459,9 +452,6 @@ export const AdminVerificationQueuePage: React.FC = () => {
           </div>
         </div>
       )}
-
-      <Footer />
-      <MobileBottomNav />
     </div>
   );
 };

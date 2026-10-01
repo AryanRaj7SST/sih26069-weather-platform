@@ -1,7 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Navbar } from '@/components/layout/Navbar';
-import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { MapHeaderCard } from '@/features/map/MapHeaderCard';
 import { MapFilterBar, MapFilters } from '@/features/map/MapFilterBar';
 import { MapLegend } from '@/features/map/MapLegend';
@@ -166,10 +164,7 @@ export const LiveMapPage: React.FC = () => {
   }, [isGeoLoading, isGeoError, geoError, mapPoints.length, uniqueLocationsCount]);
 
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-slate-100 text-slate-900">
-      {/* Navigation Header */}
-      <Navbar />
-
+    <div className="relative flex h-[calc(100vh-4rem)] w-full flex-col overflow-hidden bg-slate-100 text-slate-900">
       {/* Main Map Viewport */}
       <main className="relative flex-1 w-full overflow-hidden">
         {/* Fullscreen Map Layer */}
@@ -228,9 +223,6 @@ export const LiveMapPage: React.FC = () => {
           </div>
         )}
       </main>
-
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav />
     </div>
   );
 };

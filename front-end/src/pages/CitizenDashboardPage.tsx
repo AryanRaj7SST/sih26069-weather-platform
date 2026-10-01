@@ -3,8 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Popup, Circle, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { ShieldCheck, AlertTriangle, MapPin, Radio, Compass, Navigation, RefreshCw, Layers } from 'lucide-react';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
 import { useLocationScope } from '@/hooks/useLocationScope';
 import { LocationGateModal } from '@/components/location/LocationGateModal';
 import { useProximityAlerts } from '@/hooks/useProximityAlerts';
@@ -154,9 +152,7 @@ export const CitizenDashboardPage: React.FC = () => {
   const { activeAlert, dismissAlert } = useProximityAlerts(radiusKm);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 antialiased">
-      <Navbar />
-
+    <div className="py-6">
       {/* Feature B3: Sleek Non-Intrusive Floating Proximity Alert Toast */}
       {activeAlert && (
         <aside
@@ -191,8 +187,7 @@ export const CitizenDashboardPage: React.FC = () => {
         </aside>
       )}
 
-      <main className="flex-1 py-6">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
           {/* Header Banner */}
           <div className="flex items-center justify-between gap-4 flex-wrap rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xs">
             <div className="flex items-center space-x-3">
@@ -589,10 +584,6 @@ export const CitizenDashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </main>
-
-      <Footer />
-
       {/* Location Gate Onboarding Modal */}
       <LocationGateModal isOpen={showLocationGate} onClose={() => setShowLocationGate(false)} />
     </div>

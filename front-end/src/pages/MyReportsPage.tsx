@@ -11,7 +11,6 @@ import {
   HelpCircle,
   TrendingUp,
 } from 'lucide-react';
-import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '@/services/authApi';
 
@@ -114,10 +113,7 @@ export const MyReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased">
-      <Navbar />
-
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
           <div className="space-y-1">
@@ -238,7 +234,6 @@ export const MyReportsPage: React.FC = () => {
             ))}
           </div>
         )}
-      </main>
     </div>
   );
 };

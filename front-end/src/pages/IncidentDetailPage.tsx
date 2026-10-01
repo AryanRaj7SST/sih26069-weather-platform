@@ -12,8 +12,6 @@ import {
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker } from 'react-leaflet';
 import L from 'leaflet';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
 import { FeedbackWidget } from '@/components/incident/FeedbackWidget';
 import { ImageForensicsCard } from '@/components/incident/ImageForensicsCard';
 import { CredibilitySection } from '@/features/incidents/CredibilitySection';
@@ -74,12 +72,8 @@ export const IncidentDetailPage: React.FC = () => {
 
   if (!cleanId) {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50">
-        <Navbar />
-        <main className="flex-1 max-w-4xl mx-auto p-6 flex items-center justify-center">
-          <ErrorCard title="Missing Incident Identifier" message="No valid incident ID was provided in the URL." />
-        </main>
-        <Footer />
+      <div className="max-w-4xl mx-auto p-6 flex items-center justify-center">
+        <ErrorCard title="Missing Incident Identifier" message="No valid incident ID was provided in the URL." />
       </div>
     );
   }
@@ -95,12 +89,9 @@ export const IncidentDetailPage: React.FC = () => {
     !isNaN(incident.location.longitude);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50/50 text-slate-900">
-      <Navbar />
-
-      <main className="flex-1 py-6 sm:py-10">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
-          {/* Breadcrumb & Navigation */}
+    <div className="py-6 sm:py-10">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+        {/* Breadcrumb & Navigation */}
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -326,9 +317,6 @@ export const IncidentDetailPage: React.FC = () => {
             </div>
           )}
         </div>
-      </main>
-
-      <Footer />
     </div>
   );
 };

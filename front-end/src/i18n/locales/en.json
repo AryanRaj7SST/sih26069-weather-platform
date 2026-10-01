@@ -1,17 +1,24 @@
 {
   "nav": {
     "home": "Home",
-    "citizenArea": "Citizen Area",
+    "citizenArea": "My Area",
+    "myArea": "My Area",
     "nationalMap": "National Map",
     "incidents": "Incidents",
-    "dashboard": "Dashboard",
+    "dashboard": "Operations Dashboard",
     "liveMap": "Live Map",
-    "reportWeather": "Report Weather Event",
+    "reportWeather": "Report Event",
     "trackReport": "Track Report",
+    "myReports": "My Reports",
     "analytics": "Analytics",
     "verificationQueue": "Verification Queue",
-    "login": "Operator Access",
-    "logout": "Logout"
+    "auditLogs": "Audit Logs",
+    "tools": "Services & Tools",
+    "primaryNav": "Primary Navigation",
+    "servicesTools": "Services & Tools",
+    "login": "Sign In",
+    "logout": "Logout",
+    "citizenSignUp": "Citizen Sign Up"
   },
   "citizen": {
     "title": "My Area Citizen Dashboard",

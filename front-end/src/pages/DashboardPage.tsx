@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
-import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import {
   DashboardFilters,
   DashboardFilterState,
@@ -226,109 +223,97 @@ export const DashboardPage: React.FC = () => {
   const activeError = summaryError || geoError || recentError;
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50/60 text-slate-900 pb-16 md:pb-0">
-      {/* Top Navbar */}
-      <Navbar />
+    <div className="py-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+        {/* Top Filter Bar */}
+        <DashboardFilters
+          filters={filters}
+          onChange={setFilters}
+          onRefresh={handleRefresh}
+          isFetching={isFetching}
+        />
 
-      {/* Main Dashboard Workspace */}
-      <main className="flex-1">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-          {/* Top Filter Bar */}
-          <DashboardFilters
-            filters={filters}
-            onChange={setFilters}
-            onRefresh={handleRefresh}
-            isFetching={isFetching}
-          />
-
-          {/* Location Scope Indicator Banner */}
-          <div className="flex items-center justify-between rounded-xl bg-blue-50/80 border border-blue-200/80 px-3.5 py-2 text-xs text-blue-900 shadow-2xs">
-            <div className="flex items-center space-x-2">
+        {/* Location Scope Indicator Banner */}
+        <div className="flex items-center justify-between rounded-xl bg-blue-50/80 border border-blue-200/80 px-3.5 py-2 text-xs text-blue-900 shadow-2xs">
+          <div className="flex items-center space-x-2">
+            {isDefault ? (
+              <Globe className="h-4 w-4 text-blue-600 shrink-0" />
+            ) : (
+              <MapPin className="h-4 w-4 text-blue-600 shrink-0" />
+            )}
+            <span>
               {isDefault ? (
-                <Globe className="h-4 w-4 text-blue-600 shrink-0" />
+                <>
+                  Viewing <strong>All India (National Overview)</strong>. Search your city in the top bar to narrow telemetry.
+                </>
               ) : (
-                <MapPin className="h-4 w-4 text-blue-600 shrink-0" />
+                <>
+                  Situational view scoped to <strong>{currentLocation.name}</strong> (±55km radius). Telemetry, maps, and KPIs filtered automatically.
+                </>
               )}
-              <span>
-                {isDefault ? (
-                  <>
-                    Viewing <strong>All India (National Overview)</strong>. Search your city in the top bar to narrow telemetry.
-                  </>
-                ) : (
-                  <>
-                    Situational view scoped to <strong>{currentLocation.name}</strong> (±55km radius). Telemetry, maps, and KPIs filtered automatically.
-                  </>
-                )}
-              </span>
-            </div>
+            </span>
+          </div>
+        </div>
+
+        {/* Error Banner if API call fails */}
+        {isError && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center space-x-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+            <span>
+              Failed to load situational dashboard data:{' '}
+              {activeError instanceof Error ? activeError.message : 'Unknown error'}.
+            </span>
+          </div>
+        )}
+
+        {/* Row 1: KPI Summary Cards (Server-side Aggregated) */}
+        <DashboardKpiCards
+          summary={summaryData}
+          isLoading={isSummaryLoading}
+        />
+
+        {/* Row 2: Situational Overview Map + Live Incident Feed (GeoJSON Map & Bounded Feed) */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Left 8 columns: Situational Map */}
+          <div className="lg:col-span-8">
+            <DashboardMap
+              reports={mapPoints}
+              severeCount={summaryData?.severity?.severe_high_count}
+              selectedReport={selectedReport}
+              onSelectReport={setSelectedReport}
+              targetRegion={targetRegion}
+            />
           </div>
 
-          {/* Error Banner if API call fails */}
-          {isError && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center space-x-2">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
-              <span>
-                Failed to load situational dashboard data:{' '}
-                {activeError instanceof Error ? activeError.message : 'Unknown error'}.
-              </span>
-            </div>
-          )}
-
-          {/* Row 1: KPI Summary Cards (Server-side Aggregated) */}
-          <DashboardKpiCards
-            summary={summaryData}
-            isLoading={isSummaryLoading}
-          />
-
-          {/* Row 2: Situational Overview Map + Live Incident Feed (GeoJSON Map & Bounded Feed) */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* Left 8 columns: Situational Map */}
-            <div className="lg:col-span-8">
-              <DashboardMap
-                reports={mapPoints}
-                severeCount={summaryData?.severity?.severe_high_count}
-                selectedReport={selectedReport}
-                onSelectReport={setSelectedReport}
-                targetRegion={targetRegion}
-              />
-            </div>
-
-            {/* Right 4 columns: Recent Incident Feed */}
-            <div className="lg:col-span-4">
-              <RecentIncidentFeed
-                reports={recentIncidents}
-                totalCount={summaryData?.total_count ?? recentFeedResponse?.pagination?.total_records}
-                selectedReport={selectedReport}
-                onSelectReport={handleSelectFeedReport}
-                isLoading={isRecentLoading}
-              />
-            </div>
-          </div>
-
-          {/* Row 3: Bottom Analytics and Distribution Cards (Server-side Aggregated) */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            <IncidentTrendCard
-              distribution={summaryData?.diurnal_distribution}
-              isLoading={isSummaryLoading}
-            />
-            <EventDistributionCard
-              distribution={summaryData?.category_distribution}
-              isLoading={isSummaryLoading}
-            />
-            <VerificationSummaryCard
-              verification={summaryData?.verification}
-              totalCount={summaryData?.total_count}
-              isLoading={isSummaryLoading}
+          {/* Right 4 columns: Recent Incident Feed */}
+          <div className="lg:col-span-4">
+            <RecentIncidentFeed
+              reports={recentIncidents}
+              totalCount={summaryData?.total_count ?? recentFeedResponse?.pagination?.total_records}
+              selectedReport={selectedReport}
+              onSelectReport={handleSelectFeedReport}
+              isLoading={isRecentLoading}
             />
           </div>
         </div>
-      </main>
 
-      {/* Footer */}
-      <Footer />
-
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav />
+        {/* Row 3: Bottom Analytics and Distribution Cards (Server-side Aggregated) */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <IncidentTrendCard
+            distribution={summaryData?.diurnal_distribution}
+            isLoading={isSummaryLoading}
+          />
+          <EventDistributionCard
+            distribution={summaryData?.category_distribution}
+            isLoading={isSummaryLoading}
+          />
+          <VerificationSummaryCard
+            verification={summaryData?.verification}
+            totalCount={summaryData?.total_count}
+            isLoading={isSummaryLoading}
+          />
+        </div>
+      </div>
     </div>
   );
 };

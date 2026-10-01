@@ -6,7 +6,7 @@
 - **Problem statement:** SIH 2026 PS 26069 (weather event intelligence platform)
 - **Team status:** Selected from IIT Madras internal round; now competing on this PS with other colleges
 - **Goals of the current phase:** (1) architecture that stays fast after deployment, (2) intact and recoverable pipelines, (3) full PS requirement coverage, (4) standout features
-- **Last updated:** 2026-10-01 (C-lite audit: S2 merge, demo stack S1/S2 fixtures, Locust load test, stream throughput, worker drill, honest docs)
+- **Last updated:** 2026-10-02 (TASK N1–N7: Role-based routing shell + separate Admin/Citizen navigation)
 - **Deployment status:** Local isolated Docker compose demo stack (`sih-demo`) tested & operational at `:8080`. Total memory: ~1.51 GB idle across 11 containers. Production guardrails & smoke tests verified.
 - **Legend:** ✅ done · 🟡 in progress · ⬜ todo · ❌ failed / blocked · 🔎 needs verification
 
@@ -274,6 +274,7 @@ Keep your edits to this file under 40 lines. In your final reply, only state "PR
 | 2026-10-01 | A (6–8) | `4f74716` | Demo stack: PHYSICAL_CORROBORATION_ENABLED=true in compose, DEMO_FIXTURE opt-in (default false); SSE RealtimeEventType.INCIDENT_PHYSICAL_CORROBORATION_COMPLETED added; report_service rollback fix | 7 passed (corroboration_api + pipeline); enum import OK; logs/A_6.log |
 | 2026-10-01 | S2 (1–12) | `s2-image-forensics` | S2-lite Image Forensics: pure pHash/dHash & EXIF logic, mig 0020, pipeline worker & outbox, credibility step 16 (cap 0.05), public/operator API, FE card (EN/HI), SIMULATED fixtures | BE 609 pass / 0 fail (seed 42); FE 190 pass, tsc/lint/build clean; mypy (0 new), ruff clean |
 | 2026-10-01 | C-lite (C1–C8) | `main` | C-lite: S2 merge, demo stack S1/S2 fixtures, Locust load test (576 RPS at 100u), stream throughput (14.9k ev/s), worker kill drill (2.47s recovery, 0 lost/dup), secret/path audit, LOAD_REPORT, DEMO_SCRIPT, PITCH | BE 609 pass / 0 fail; FE 190 pass; tsc/lint/build clean; logs/C_1..C_8.log |
+| 2026-10-02 | N1–N7 | `main` | Role-based routing shell, separate Citizen/Staff layouts & navbars, route guards | FE 181 pass; tsc/lint/build clean |
 
 ---
 
@@ -315,6 +316,7 @@ Keep your edits to this file under 40 lines. In your final reply, only state "PR
 | 32 | `alembic check`: migration 0018 added for archive metadata & ORM index alignment; PostGIS filter added to env.py; alembic check exit 0; audit DB upgrade head -> downgrade -1 -> upgrade head verified (audit/logs/K1_7.log) | Medium | — | ✅ |
 | 33 | Test DB is truncated once per session and seeded; observation test uses unique location; full suite 476/0 three consecutive runs | Medium | — | ✅ |
 | 34 | C-lite audit: Pytest 609/0 (seed 42); Locust 10/50/100u (576 RPS, p50 35ms, 0% err); stream 14.9k ev/s; worker kill 2.47s (0 lost/dup); repo path/secret audit; DEMO_SCRIPT & PITCH complete | Low | — | 🔎 (C-lite) |
+| 35 | Decide whether to reuse HomePage content inside the citizen dashboard or delete | Low | — | ⬜ |
 
 ---
 
@@ -324,3 +326,4 @@ Keep your edits to this file under 40 lines. In your final reply, only state "PR
 - Backend tests: `PYTHONPATH=back-end back-end/.venv/bin/pytest back-end/tests -q` (about 3 minutes)
 - Lint/type: `ruff check .`, `mypy app tests`; frontend: `npm run typecheck`, `npx vitest run`, `npm run build`
 - Audit scripts and logs live in `audit/` (outside `back-end/` and `front-end/src/`)
+
