@@ -21,6 +21,7 @@ from app.models.relief_center import ReliefCenter
 from app.models.report import WeatherReport
 from app.models.source import Source
 from app.models.user import User
+from scripts.seed_india_area import seed_india_area
 
 
 async def seed_users(session: AsyncSession) -> None:
@@ -565,6 +566,7 @@ async def main() -> None:
     print("🌱 Running National Weather Platform Database Seeder...")
     async with async_session_factory() as session:
         await seed_users(session)
+        await seed_india_area(session)
         await seed_relief_centers(session)
         await seed_active_incidents(session)
         await seed_forecast_advisories(session)

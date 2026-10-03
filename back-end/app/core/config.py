@@ -112,6 +112,20 @@ class Settings(BaseSettings):
     OPEN_METEO_TIMEOUT_SECONDS: float = 15.0
     OPEN_METEO_MIN_REQUEST_INTERVAL_SECONDS: float = 1.0
 
+    # Open-Meteo Gridded Weather & Marine Forecast Adapter (India & EEZ Domain)
+    GRID_FORECAST_WEATHER_ENDPOINT: str = "https://api.open-meteo.com/v1/forecast"
+    GRID_FORECAST_MARINE_ENDPOINT: str = "https://marine-api.open-meteo.com/v1/marine"
+    GRID_FORECAST_LAT_MIN: float = 0.0
+    GRID_FORECAST_LAT_MAX: float = 40.0
+    GRID_FORECAST_LON_MIN: float = 60.0
+    GRID_FORECAST_LON_MAX: float = 100.0
+    GRID_FORECAST_STEP_DEGREES: float = 2.5
+    GRID_FORECAST_BATCH_SIZE: int = 25
+    GRID_FORECAST_INTERVAL_SECONDS: float = 21600.0
+    GRID_FORECAST_TIMEOUT_SECONDS: float = 20.0
+    GRID_FORECAST_MIN_REQUEST_INTERVAL_SECONDS: float = 1.0
+    GRID_FORECAST_FORECAST_DAYS: int = 4
+
     # Phase 3: GDACS Global Disaster Alert and Coordination System Adapter
     GDACS_ENDPOINT: str = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"
     GDACS_EVENT_TYPES: List[str] = ["FL", "TC", "DR", "WF"]

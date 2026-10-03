@@ -86,6 +86,15 @@ export const CITIZEN_MORE_NAV: NavItem[] = [
     roles: ["CITIZEN"],
     group: "more",
   },
+  {
+    id: "source-parity",
+    labelKey: "nav.sourceParity",
+    defaultLabel: "Source Parity",
+    path: "/source-parity",
+    iconName: "Scale",
+    roles: ["CITIZEN"],
+    group: "more",
+  },
 ];
 
 export const CITIZEN_BOTTOM_NAV: NavItem[] = [
@@ -276,6 +285,15 @@ export const STAFF_ADMIN_MORE_NAV: NavItem[] = [
     path: "/track-report",
     iconName: "Search",
     roles: ["ADMIN"],
+    group: "more",
+  },
+  {
+    id: "source-parity",
+    labelKey: "nav.sourceParity",
+    defaultLabel: "Source Parity",
+    path: "/source-parity",
+    iconName: "Scale",
+    roles: ["ADMIN", "OPERATOR"],
     group: "more",
   },
 ];

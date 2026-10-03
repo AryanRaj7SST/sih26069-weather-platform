@@ -10,7 +10,9 @@ from app.models.duplicate import DuplicateCluster, DuplicateMember
 from app.models.evidence import EvidenceItem, IncidentEvidenceLink
 from app.models.feedback import IncidentFeedback
 from app.models.forecast import ForecastAdvisory
+from app.models.grid_forecast import MarineGridForecast, WeatherGridForecast
 from app.models.image_forensics import ImageHash, IncidentImageFinding
+from app.models.india_area import IndiaArea
 from app.models.ingestion import IngestionRun
 from app.models.media import ReportMedia
 from app.models.observation import WeatherObservation
@@ -29,6 +31,9 @@ __all__ = [
     "WeatherReport",
     "WeatherReportArchive",
     "ForecastAdvisory",
+    "WeatherGridForecast",
+    "MarineGridForecast",
+    "IndiaArea",
     "ReliefCenter",
     "IncidentFeedback",
     "ReportMedia",

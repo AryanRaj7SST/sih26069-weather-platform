@@ -73,6 +73,9 @@ const SignupPage = lazy(() =>
 const MyReportsPage = lazy(() =>
   import("@/pages/MyReportsPage").then((m) => ({ default: m.MyReportsPage }))
 );
+const SourceParityPage = lazy(() =>
+  import("@/pages/SourceParityPage").then((m) => ({ default: m.SourceParityPage }))
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -194,6 +197,7 @@ export function App() {
                       element={<IncidentDetailPage />}
                     />
                     <Route path="/analytics" element={<AnalyticsPage />} />
+                    <Route path="/source-parity" element={<SourceParityPage />} />
                   </Route>
                 </Route>
 

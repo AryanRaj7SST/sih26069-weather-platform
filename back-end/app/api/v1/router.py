@@ -15,6 +15,7 @@ from app.api.v1.relief_centers import router as relief_centers_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.routes import router as routes_router
 from app.api.v1.verification import router as verification_router
+from app.api.v1.weather_grid import router as weather_grid_router
 
 api_v1_router = APIRouter()
 
@@ -38,4 +39,5 @@ api_v1_router.include_router(
 )
 api_v1_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api_v1_router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
+api_v1_router.include_router(weather_grid_router, prefix="/weather", tags=["Gridded Forecasts"])
 api_v1_router.include_router(metrics_router, tags=["Metrics"])

@@ -8,6 +8,7 @@ from app.ingestion.exceptions import (
 )
 from app.ingestion.gdacs_adapter import GDACSAlertAdapter
 from app.ingestion.gdelt_adapter import GDELTNewsAdapter
+from app.ingestion.gridded_forecast_adapter import GriddedForecastAdapter
 from app.ingestion.imd_adapter import IMDNowcastAdapter
 from app.ingestion.mastodon_adapter import MastodonSocialAdapter
 from app.ingestion.ndma_adapter import NDMASachetAdapter
@@ -34,6 +35,8 @@ adapter_registry.register_factory("GDACS_FEED", lambda: GDACSAlertAdapter())
 adapter_registry.register_factory("DEMO_FEED", lambda: DemoSeedAdapter())
 # Phase 3 / Round 9b: RSS News Adapter
 adapter_registry.register_factory("RSS_NEWS", lambda: RSSNewsAdapter())
+# Gridded Open-Meteo Weather & Marine Forecast Adapter (India & EEZ Domain)
+adapter_registry.register_factory("GRIDDED_FORECAST", lambda: GriddedForecastAdapter())
 
 __all__ = [
     "BaseIngestionAdapter",
@@ -44,6 +47,7 @@ __all__ = [
     "GDELTNewsAdapter",
     "MastodonSocialAdapter",
     "OpenMeteoAdapter",
+    "GriddedForecastAdapter",
     "GDACSAlertAdapter",
     "RSSNewsAdapter",
     "EventNormalizer",

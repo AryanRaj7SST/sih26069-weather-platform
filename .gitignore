@@ -35,9 +35,18 @@ front-end/.env
 
 # Databases & local storage
 data/
+!back-end/app/data/
+back-end/data/raw/
 *.sqlite3
 *.db
 minio_data/
+*.zip
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+*.qmd
 
 # IDEs & OS
 .DS_Store

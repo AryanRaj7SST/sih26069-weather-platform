@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Circle } from 'react-leaflet';
 import L from 'leaflet';
-import { Globe, Layers, RefreshCw } from 'lucide-react';
+import { Globe, Layers, RefreshCw, Thermometer, CloudRain, Wind, Waves } from 'lucide-react';
 import { routeApi } from '@/services/routeApi';
 import { incidentApi } from '@/services/incidentApi';
 import { GeoJSONFeatureCollection } from '@/types';
+import { fetchWeatherTimes, fetchWeatherGrid, fetchMarineGrid, WeatherGridFeatureCollection } from '@/services/weatherGridApi';
+import { WeatherCanvasLayer, WeatherMetric } from '@/components/map/WeatherCanvasLayer';
+import { WeatherTimeSlider } from '@/components/map/WeatherTimeSlider';
+import { WeatherColorLegend } from '@/components/map/WeatherColorLegend';
 
 // Custom Leaflet incident marker icon for national view
 const nationalIncidentIcon = (severity: string) => {
@@ -25,6 +29,8 @@ export const NationalMapPage: React.FC = () => {
   const [showIncidents, setShowIncidents] = useState(true);
   const [showForecasts, setShowForecasts] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [activeWeatherMetric, setActiveWeatherMetric] = useState<WeatherMetric | null>('temperature');
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   // 1. Fetch Nationwide Verified Incidents
   const { data: incidentsGeo, isLoading: isLoadingIncidents, refetch: refetchIncidents } = useQuery<GeoJSONFeatureCollection>({
@@ -48,6 +54,46 @@ export const NationalMapPage: React.FC = () => {
       return res.json();
     },
     staleTime: Infinity,
+  });
+
+  // 4. Fetch Available Forecast Time Steps
+  const { data: timesData } = useQuery({
+    queryKey: ['weatherTimes'],
+    queryFn: fetchWeatherTimes,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Default to hour closest to now
+  React.useEffect(() => {
+    if (timesData?.valid_times && timesData.valid_times.length > 0 && !selectedTime) {
+      const nowMs = Date.now();
+      let bestTime = timesData.valid_times[0];
+      let minDiff = Infinity;
+      timesData.valid_times.forEach((t) => {
+        const diff = Math.abs(new Date(t).getTime() - nowMs);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestTime = t;
+        }
+      });
+      setSelectedTime(bestTime);
+    }
+  }, [timesData, selectedTime]);
+
+  // 5. Fetch Gridded Weather Forecast for selected valid_time
+  const { data: weatherGridData } = useQuery<WeatherGridFeatureCollection>({
+    queryKey: ['weatherGrid', selectedTime],
+    queryFn: () => fetchWeatherGrid(selectedTime || undefined),
+    enabled: activeWeatherMetric !== null,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // 6. Fetch Marine Grid Forecast for selected valid_time
+  const { data: marineGridData } = useQuery<WeatherGridFeatureCollection>({
+    queryKey: ['marineGrid', selectedTime],
+    queryFn: () => fetchMarineGrid(selectedTime || undefined),
+    enabled: activeWeatherMetric === 'wave_height',
+    staleTime: 1000 * 60 * 2,
   });
 
   const incidentFeatures = incidentsGeo?.features || [];
@@ -152,6 +198,75 @@ export const NationalMapPage: React.FC = () => {
                   <span>India EEZ Maritime Boundary</span>
                 </span>
               </label>
+            </div>
+
+            {/* Toggleable Gridded Weather Forecast Layers */}
+            <div className="w-full pt-3 mt-1 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center space-x-2 text-xs font-bold text-slate-700">
+                <Thermometer className="h-4 w-4 text-amber-500" />
+                <span>Gridded Model Forecast Layers:</span>
+              </div>
+              <div className="flex items-center space-x-2 text-xs flex-wrap gap-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveWeatherMetric(null)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeWeatherMetric === null
+                      ? "bg-slate-800 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  Off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveWeatherMetric("temperature")}
+                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeWeatherMetric === "temperature"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
+                  }`}
+                >
+                  <Thermometer className="h-3.5 w-3.5" />
+                  <span>Temperature</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveWeatherMetric("precipitation")}
+                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeWeatherMetric === "precipitation"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
+                  }`}
+                >
+                  <CloudRain className="h-3.5 w-3.5" />
+                  <span>Rainfall</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveWeatherMetric("wind")}
+                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeWeatherMetric === "wind"
+                      ? "bg-teal-600 text-white shadow-xs"
+                      : "bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200"
+                  }`}
+                >
+                  <Wind className="h-3.5 w-3.5" />
+                  <span>Wind Flow</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveWeatherMetric("wave_height")}
+                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeWeatherMetric === "wave_height"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200"
+                  }`}
+                >
+                  <Waves className="h-3.5 w-3.5" />
+                  <span>Wave Height (EEZ Sea)</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -265,7 +380,49 @@ export const NationalMapPage: React.FC = () => {
                     </Marker>
                   );
                 })}
+
+              {/* Gridded Weather Forecast Canvas Layer */}
+              <WeatherCanvasLayer
+                weatherFeatures={weatherGridData?.features || []}
+                marineFeatures={marineGridData?.features || []}
+                activeMetric={activeWeatherMetric}
+              />
             </MapContainer>
+
+            {/* Weather Time Slider Overlay */}
+            {activeWeatherMetric && timesData?.valid_times && timesData.valid_times.length > 0 && (
+              <div className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-auto sm:left-1/2 sm:-translate-x-1/2 z-[490] flex justify-center">
+                <WeatherTimeSlider
+                  validTimes={timesData.valid_times}
+                  selectedTime={selectedTime}
+                  onSelectTime={setSelectedTime}
+                  activeMetric={activeWeatherMetric}
+                />
+              </div>
+            )}
+
+            {/* Weather Color Legend Overlay */}
+            {activeWeatherMetric && (
+              <div className="absolute top-4 right-4 z-[490]">
+                <WeatherColorLegend activeMetric={activeWeatherMetric} />
+              </div>
+            )}
+
+            {/* Source Note on Map */}
+            {activeWeatherMetric && (
+              <div
+                data-testid="weather-source-note"
+                className="absolute top-4 left-14 z-[480] max-w-xs bg-slate-900/85 backdrop-blur-md border border-slate-700/70 rounded-xl px-3 py-1.5 text-[11px] text-slate-300 font-sans shadow-lg flex items-center space-x-2 pointer-events-none"
+              >
+                <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0" />
+                <span>
+                  Open-Meteo model data (not station observations) - updated{" "}
+                  {timesData?.latest_fetched_at
+                    ? new Date(timesData.latest_fetched_at).toLocaleString()
+                    : "recently"}
+                </span>
+              </div>
+            )}
           </div>
         </div>
     </div>
